@@ -1,14 +1,22 @@
 import { useState, useRef, useEffect } from "react";
-import { Plus, GripVertical, Trash2 } from "lucide-react";
+import { Plus, GripVertical, Trash2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { RichTextEditor } from "@/components/RichTextEditor";
+import { ImageBlock } from "@/components/blocks/ImageBlock";
+import { QuoteBlock } from "@/components/blocks/QuoteBlock";
+import { CodeBlock } from "@/components/blocks/CodeBlock";
+import { CalloutBlock } from "@/components/blocks/CalloutBlock";
+import { ToggleBlock } from "@/components/blocks/ToggleBlock";
+import { SlashMenu } from "@/components/SlashMenu";
 
-export type BlockType = "paragraph" | "heading1" | "heading2" | "heading3" | "bulleted-list" | "numbered-list" | "divider";
+export type BlockType = "paragraph" | "heading1" | "heading2" | "heading3" | "bulleted-list" | "numbered-list" | "divider" | "image" | "code" | "quote" | "callout" | "toggle";
 
 export interface Block {
   id: string;
   type: BlockType;
   content: string;
+  metadata?: Record<string, any>;
 }
 
 interface EditorProps {
@@ -18,19 +26,12 @@ interface EditorProps {
   onBlocksChange: (blocks: Block[]) => void;
 }
 
-const BLOCK_TYPES = [
-  { type: "paragraph" as BlockType, label: "Text", description: "Just start writing with plain text." },
-  { type: "heading1" as BlockType, label: "Heading 1", description: "Big section heading." },
-  { type: "heading2" as BlockType, label: "Heading 2", description: "Medium section heading." },
-  { type: "heading3" as BlockType, label: "Heading 3", description: "Small section heading." },
-  { type: "bulleted-list" as BlockType, label: "Bulleted list", description: "Create a simple bulleted list." },
-  { type: "numbered-list" as BlockType, label: "Numbered list", description: "Create a list with numbering." },
-  { type: "divider" as BlockType, label: "Divider", description: "Visually divide blocks." },
-];
+// Moved to SlashMenu component
 
 export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorProps) {
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
-  const [showBlockMenu, setShowBlockMenu] = useState<string | null>(null);
+  const [showSlashMenu, setShowSlashMenu] = useState<{ blockId: string; position: { top: number; left: number }; search: string } | null>(null);
+  const [draggedBlock, setDraggedBlock] = useState<string | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -44,6 +45,7 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
     id: Math.random().toString(36).substring(2),
     type,
     content: "",
+    metadata: {},
   });
 
   const addBlock = (afterId?: string, type: BlockType = "paragraph") => {
@@ -56,7 +58,7 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
       newBlocks.splice(index + 1, 0, newBlock);
       onBlocksChange(newBlocks);
     }
-    setShowBlockMenu(null);
+    setShowSlashMenu(null);
   };
 
   const updateBlock = (blockId: string, updates: Partial<Block>) => {
@@ -89,130 +91,233 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
           }, 0);
         }
       }
+    } else if (e.key === "/" && showSlashMenu === null) {
+      // Show slash menu
+      const target = e.target as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      setShowSlashMenu({
+        blockId,
+        position: { top: rect.bottom + 5, left: rect.left },
+        search: ""
+      });
     }
+  };
+
+  const handleSlashMenuSelect = (type: BlockType) => {
+    if (showSlashMenu) {
+      const blockIndex = blocks.findIndex(b => b.id === showSlashMenu.blockId);
+      updateBlock(showSlashMenu.blockId, { type });
+      setShowSlashMenu(null);
+    }
+  };
+
+  const handleDragStart = (e: React.DragEvent, blockId: string) => {
+    setDraggedBlock(blockId);
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+  };
+
+  const handleDrop = (e: React.DragEvent, targetBlockId: string) => {
+    e.preventDefault();
+    
+    if (!draggedBlock || draggedBlock === targetBlockId) {
+      setDraggedBlock(null);
+      return;
+    }
+
+    const draggedIndex = blocks.findIndex(b => b.id === draggedBlock);
+    const targetIndex = blocks.findIndex(b => b.id === targetBlockId);
+    
+    const newBlocks = [...blocks];
+    const [removed] = newBlocks.splice(draggedIndex, 1);
+    newBlocks.splice(targetIndex, 0, removed);
+    
+    onBlocksChange(newBlocks);
+    setDraggedBlock(null);
   };
 
   const renderBlock = (block: Block, index: number) => {
     const isHovered = hoveredBlockId === block.id;
+    const isDragged = draggedBlock === block.id;
     
-    const baseClasses = "w-full bg-transparent border-none outline-none resize-none placeholder-text-placeholder transition-colors duration-150";
-    
-    let Component: keyof JSX.IntrinsicElements = "textarea";
-    let className = "";
-    let placeholder = "Type '/' for commands";
+    const commonProps = {
+      content: block.content,
+      onChange: (content: string) => updateBlock(block.id, { content }),
+      onKeyDown: (e: React.KeyboardEvent) => handleKeyDown(e, block.id, index),
+    };
+
+    let blockContent;
 
     switch (block.type) {
       case "heading1":
-        className = `${baseClasses} text-3xl font-bold text-text-primary leading-tight`;
-        placeholder = "Heading 1";
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Heading 1"
+            className="text-3xl font-bold text-text-primary leading-tight"
+          />
+        );
         break;
       case "heading2":
-        className = `${baseClasses} text-2xl font-semibold text-text-primary leading-tight`;
-        placeholder = "Heading 2";
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Heading 2"
+            className="text-2xl font-semibold text-text-primary leading-tight"
+          />
+        );
         break;
       case "heading3":
-        className = `${baseClasses} text-xl font-medium text-text-primary leading-tight`;
-        placeholder = "Heading 3";
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Heading 3"
+            className="text-xl font-medium text-text-primary leading-tight"
+          />
+        );
         break;
       case "bulleted-list":
-        className = `${baseClasses} text-base text-text-primary pl-6`;
-        placeholder = "List item";
-        break;
-      case "numbered-list":
-        className = `${baseClasses} text-base text-text-primary pl-6`;
-        placeholder = "List item";
-        break;
-      case "divider":
-        return (
-          <div
-            key={block.id}
-            className="group relative py-3"
-            onMouseEnter={() => setHoveredBlockId(block.id)}
-            onMouseLeave={() => setHoveredBlockId(null)}
-          >
-            <div className="flex items-center">
-              <div className="h-px bg-divider flex-1" />
-            </div>
-            {isHovered && (
-              <div className="absolute left-[-24px] top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 w-6 p-0 hover:bg-hover-bg"
-                  onClick={() => deleteBlock(block.id)}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            )}
+        blockContent = (
+          <div className="flex items-start">
+            <div className="w-1.5 h-1.5 bg-text-primary rounded-full mt-2 mr-3 flex-shrink-0" />
+            <RichTextEditor
+              {...commonProps}
+              placeholder="List item"
+              className="flex-1 text-base text-text-primary"
+            />
           </div>
         );
+        break;
+      case "numbered-list":
+        blockContent = (
+          <div className="flex items-start">
+            <span className="text-text-primary font-medium mr-3 flex-shrink-0 mt-0.5">{index + 1}.</span>
+            <RichTextEditor
+              {...commonProps}
+              placeholder="List item"
+              className="flex-1 text-base text-text-primary"
+            />
+          </div>
+        );
+        break;
+      case "image":
+        blockContent = (
+          <ImageBlock
+            content={block.content}
+            onChange={(content) => updateBlock(block.id, { content })}
+            onDelete={() => deleteBlock(block.id)}
+            isHovered={isHovered}
+          />
+        );
+        break;
+      case "code":
+        blockContent = (
+          <CodeBlock
+            content={block.content}
+            onChange={(content) => updateBlock(block.id, { content })}
+            onKeyDown={(e) => handleKeyDown(e, block.id, index)}
+            isHovered={isHovered}
+          />
+        );
+        break;
+      case "quote":
+        blockContent = (
+          <QuoteBlock
+            content={block.content}
+            onChange={(content) => updateBlock(block.id, { content })}
+            onKeyDown={(e) => handleKeyDown(e, block.id, index)}
+          />
+        );
+        break;
+      case "callout":
+        blockContent = (
+          <CalloutBlock
+            content={block.content}
+            onChange={(content) => updateBlock(block.id, { content })}
+            onKeyDown={(e) => handleKeyDown(e, block.id, index)}
+            calloutType={block.metadata?.calloutType || "info"}
+            onTypeChange={(type) => updateBlock(block.id, { metadata: { ...block.metadata, calloutType: type } })}
+          />
+        );
+        break;
+      case "toggle":
+        blockContent = (
+          <ToggleBlock
+            content={block.content}
+            onChange={(content) => updateBlock(block.id, { content })}
+            onKeyDown={(e) => handleKeyDown(e, block.id, index)}
+          >
+            {/* TODO: Add nested blocks functionality */}
+          </ToggleBlock>
+        );
+        break;
+      case "divider":
+        blockContent = (
+          <div className="flex items-center py-4">
+            <div className="h-px bg-divider flex-1" />
+          </div>
+        );
+        break;
       default:
-        className = `${baseClasses} text-base text-text-primary leading-relaxed`;
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Type '/' for commands"
+            className="text-base text-text-primary leading-relaxed"
+          />
+        );
         break;
     }
 
     return (
       <div
         key={block.id}
-        className="group relative"
+        className={cn(
+          "group relative py-1",
+          isDragged && "opacity-50",
+          "transition-all duration-150"
+        )}
         onMouseEnter={() => setHoveredBlockId(block.id)}
         onMouseLeave={() => setHoveredBlockId(null)}
+        draggable
+        onDragStart={(e) => handleDragStart(e, block.id)}
+        onDragOver={handleDragOver}
+        onDrop={(e) => handleDrop(e, block.id)}
       >
-        <div className="flex items-start">
-          {(block.type === "bulleted-list" || block.type === "numbered-list") && (
-            <div className="absolute left-0 top-0 pt-1">
-              {block.type === "bulleted-list" ? (
-                <div className="w-1.5 h-1.5 bg-text-primary rounded-full mt-2" />
-              ) : (
-                <span className="text-text-primary font-medium">{index + 1}.</span>
-              )}
-            </div>
-          )}
-          
-          <textarea
-            data-block-id={block.id}
-            className={className}
-            value={block.content}
-            placeholder={placeholder}
-            rows={1}
-            onChange={(e) => {
-              updateBlock(block.id, { content: e.target.value });
-              // Auto-resize
-              e.target.style.height = 'auto';
-              e.target.style.height = `${e.target.scrollHeight}px`;
-            }}
-            onKeyDown={(e) => handleKeyDown(e, block.id, index)}
-          />
-        </div>
+        {blockContent}
         
         {isHovered && (
-          <div className="absolute left-[-24px] top-0 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="absolute left-[-48px] top-1 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-hover-bg cursor-grab"
+              onMouseDown={() => setDraggedBlock(block.id)}
+            >
+              <GripVertical className="h-3 w-3" />
+            </Button>
             <Button
               variant="ghost"
               size="sm"
               className="h-6 w-6 p-0 hover:bg-hover-bg"
-              onClick={() => setShowBlockMenu(showBlockMenu === block.id ? null : block.id)}
+              onClick={() => {
+                const target = document.querySelector(`[data-block-id="${block.id}"]`) as HTMLElement;
+                const rect = target?.getBoundingClientRect();
+                if (rect) {
+                  setShowSlashMenu({
+                    blockId: block.id,
+                    position: { top: rect.bottom + 5, left: rect.left },
+                    search: ""
+                  });
+                }
+              }}
             >
               <Plus className="h-3 w-3" />
             </Button>
-          </div>
-        )}
-        
-        {showBlockMenu === block.id && (
-          <div className="absolute left-0 top-8 z-10 bg-background border border-border rounded-lg shadow-lg p-2 min-w-64">
-            <div className="space-y-1">
-              {BLOCK_TYPES.map(({ type, label, description }) => (
-                <button
-                  key={type}
-                  className="w-full text-left p-2 rounded hover:bg-hover-bg transition-colors group"
-                  onClick={() => addBlock(block.id, type)}
-                >
-                  <div className="font-medium text-text-primary text-sm">{label}</div>
-                  <div className="text-text-tertiary text-xs">{description}</div>
-                </button>
-              ))}
-            </div>
           </div>
         )}
       </div>
@@ -224,13 +329,12 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
       <div className="max-w-4xl mx-auto px-8 py-12">
         {/* Page Title */}
         <div className="mb-8">
-          <textarea
-            ref={titleRef}
-            className="w-full text-5xl font-bold text-text-primary bg-transparent border-none outline-none resize-none placeholder-text-placeholder leading-tight"
+          <RichTextEditor
+            content={title}
+            onChange={onTitleChange}
             placeholder="Untitled"
-            value={title}
-            onChange={(e) => onTitleChange(e.target.value)}
-            rows={1}
+            className="text-5xl font-bold text-text-primary leading-tight"
+            autoFocus
           />
         </div>
         
@@ -250,6 +354,16 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
             </div>
           )}
         </div>
+
+        {/* Slash Menu */}
+        {showSlashMenu && (
+          <SlashMenu
+            onSelect={handleSlashMenuSelect}
+            onClose={() => setShowSlashMenu(null)}
+            position={showSlashMenu.position}
+            search={showSlashMenu.search}
+          />
+        )}
       </div>
     </div>
   );
