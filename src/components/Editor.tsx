@@ -17,6 +17,7 @@ export interface Block {
   type: BlockType;
   content: string;
   metadata?: Record<string, any>;
+  children?: Block[];
 }
 
 interface EditorProps {
@@ -46,11 +47,25 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
     type,
     content: "",
     metadata: {},
+    children: [],
   });
 
-  const addBlock = (afterId?: string, type: BlockType = "paragraph") => {
+  const addBlock = (afterId?: string, type: BlockType = "paragraph", parentId?: string) => {
     const newBlock = createBlock(type);
-    if (!afterId) {
+    
+    if (parentId) {
+      // Add block as child of parent
+      const newBlocks = blocks.map(block => {
+        if (block.id === parentId) {
+          return {
+            ...block,
+            children: [...(block.children || []), newBlock]
+          };
+        }
+        return block;
+      });
+      onBlocksChange(newBlocks);
+    } else if (!afterId) {
       onBlocksChange([...blocks, newBlock]);
     } else {
       const index = blocks.findIndex(b => b.id === afterId);
@@ -62,15 +77,35 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
   };
 
   const updateBlock = (blockId: string, updates: Partial<Block>) => {
-    const newBlocks = blocks.map(block =>
-      block.id === blockId ? { ...block, ...updates } : block
-    );
-    onBlocksChange(newBlocks);
+    const updateBlockRecursive = (blocks: Block[]): Block[] => {
+      return blocks.map(block => {
+        if (block.id === blockId) {
+          return { ...block, ...updates };
+        }
+        if (block.children) {
+          return { ...block, children: updateBlockRecursive(block.children) };
+        }
+        return block;
+      });
+    };
+    onBlocksChange(updateBlockRecursive(blocks));
   };
 
   const deleteBlock = (blockId: string) => {
-    if (blocks.length === 1) return; // Don't delete the last block
-    const newBlocks = blocks.filter(block => block.id !== blockId);
+    const deleteBlockRecursive = (blocks: Block[]): Block[] => {
+      return blocks.filter(block => block.id !== blockId).map(block => {
+        if (block.children) {
+          return { ...block, children: deleteBlockRecursive(block.children) };
+        }
+        return block;
+      });
+    };
+    
+    const newBlocks = deleteBlockRecursive(blocks);
+    if (newBlocks.length === 0) {
+      // Don't delete if it would result in no blocks
+      return;
+    }
     onBlocksChange(newBlocks);
   };
 
@@ -250,8 +285,15 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
             content={block.content}
             onChange={(content) => updateBlock(block.id, { content })}
             onKeyDown={(e) => handleKeyDown(e, block.id, index)}
+            onAddChild={() => addBlock(undefined, "paragraph", block.id)}
           >
-            {/* TODO: Add nested blocks functionality */}
+            {block.children && block.children.length > 0 && (
+              <div className="space-y-2">
+                {block.children.map((childBlock, childIndex) => 
+                  renderNestedBlock(childBlock, childIndex, block.id)
+                )}
+              </div>
+            )}
           </ToggleBlock>
         );
         break;
@@ -317,6 +359,115 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
               }}
             >
               <Plus className="h-3 w-3" />
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderNestedBlock = (block: Block, index: number, parentId: string) => {
+    const isHovered = hoveredBlockId === block.id;
+    
+    const commonProps = {
+      content: block.content,
+      onChange: (content: string) => updateBlock(block.id, { content }),
+      onKeyDown: (e: React.KeyboardEvent) => {
+        if (e.key === "Enter" && !e.shiftKey) {
+          e.preventDefault();
+          addBlock(undefined, "paragraph", parentId);
+        } else if (e.key === "Backspace" && block.content === "") {
+          e.preventDefault();
+          deleteBlock(block.id);
+        }
+      },
+    };
+
+    let blockContent;
+    switch (block.type) {
+      case "heading1":
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Heading 1"
+            className="text-2xl font-bold text-text-primary leading-tight"
+          />
+        );
+        break;
+      case "heading2":
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Heading 2"
+            className="text-xl font-semibold text-text-primary leading-tight"
+          />
+        );
+        break;
+      case "heading3":
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Heading 3"
+            className="text-lg font-medium text-text-primary leading-tight"
+          />
+        );
+        break;
+      case "bulleted-list":
+        blockContent = (
+          <div className="flex items-start">
+            <div className="w-1.5 h-1.5 bg-text-primary rounded-full mt-2 mr-3 flex-shrink-0" />
+            <RichTextEditor
+              {...commonProps}
+              placeholder="List item"
+              className="flex-1 text-base text-text-primary"
+            />
+          </div>
+        );
+        break;
+      case "numbered-list":
+        blockContent = (
+          <div className="flex items-start">
+            <span className="text-text-primary font-medium mr-3 flex-shrink-0 mt-0.5">{index + 1}.</span>
+            <RichTextEditor
+              {...commonProps}
+              placeholder="List item"
+              className="flex-1 text-base text-text-primary"
+            />
+          </div>
+        );
+        break;
+      default:
+        blockContent = (
+          <RichTextEditor
+            {...commonProps}
+            placeholder="Type text here..."
+            className="text-base text-text-primary leading-relaxed"
+          />
+        );
+        break;
+    }
+
+    return (
+      <div
+        key={block.id}
+        className={cn(
+          "group relative py-1",
+          "transition-all duration-150"
+        )}
+        onMouseEnter={() => setHoveredBlockId(block.id)}
+        onMouseLeave={() => setHoveredBlockId(null)}
+      >
+        {blockContent}
+        
+        {isHovered && (
+          <div className="absolute left-[-32px] top-1 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0 hover:bg-hover-bg"
+              onClick={() => deleteBlock(block.id)}
+            >
+              <Trash2 className="h-3 w-3" />
             </Button>
           </div>
         )}
