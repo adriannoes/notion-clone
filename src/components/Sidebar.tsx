@@ -1,14 +1,32 @@
 import { useState } from "react";
-import { ChevronDown, ChevronRight, Plus, FileText, Trash2, Edit2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Plus, FileText, Trash2, Edit2, Star, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 export interface Page {
   id: string;
   title: string;
   children?: Page[];
   isExpanded?: boolean;
+  isFavorite?: boolean;
 }
 
 interface SidebarProps {
@@ -18,6 +36,165 @@ interface SidebarProps {
   onPageCreate: (parentId?: string) => void;
   onPageDelete: (pageId: string) => void;
   onPageRename: (pageId: string, newTitle: string) => void;
+  onPageReorder: (pages: Page[]) => void;
+  onToggleFavorite: (pageId: string) => void;
+}
+
+interface SortablePageItemProps {
+  page: Page;
+  level: number;
+  currentPageId?: string;
+  editingPageId: string | null;
+  editTitle: string;
+  onPageSelect: (page: Page) => void;
+  onStartEdit: (page: Page) => void;
+  onSaveEdit: () => void;
+  onCancelEdit: () => void;
+  setEditTitle: (title: string) => void;
+  onPageCreate: (parentId?: string) => void;
+  onPageDelete: (pageId: string) => void;
+  onToggleFavorite: (pageId: string) => void;
+}
+
+function SortablePageItem({
+  page,
+  level,
+  currentPageId,
+  editingPageId,
+  editTitle,
+  onPageSelect,
+  onStartEdit,
+  onSaveEdit,
+  onCancelEdit,
+  setEditTitle,
+  onPageCreate,
+  onPageDelete,
+  onToggleFavorite,
+}: SortablePageItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: page.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <div
+        className={cn(
+          "group flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer transition-colors duration-150",
+          "hover:bg-hover-bg",
+          currentPageId === page.id && "bg-block-selected",
+          level > 0 && "ml-4"
+        )}
+        style={{ paddingLeft: `${8 + level * 16}px` }}
+      >
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+          <GripVertical className="h-3 w-3 text-text-tertiary opacity-0 group-hover:opacity-100" />
+        </div>
+
+        {page.children && page.children.length > 0 ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-4 w-4 p-0 hover:bg-transparent"
+            onClick={(e) => {
+              e.stopPropagation();
+            }}
+          >
+            {page.isExpanded ? (
+              <ChevronDown className="h-3 w-3" />
+            ) : (
+              <ChevronRight className="h-3 w-3" />
+            )}
+          </Button>
+        ) : (
+          <div className="w-4" />
+        )}
+        
+        <FileText className="h-4 w-4 text-text-tertiary flex-shrink-0" />
+        
+        {editingPageId === page.id ? (
+          <Input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            onBlur={onSaveEdit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSaveEdit();
+              if (e.key === "Escape") onCancelEdit();
+            }}
+            className="h-6 text-sm border-none shadow-none p-0 bg-transparent focus-visible:ring-0"
+            autoFocus
+          />
+        ) : (
+          <span
+            className="text-sm text-text-primary truncate flex-1 min-w-0"
+            onClick={() => onPageSelect(page)}
+          >
+            {page.title}
+          </span>
+        )}
+        
+        <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn(
+              "h-6 w-6 p-0",
+              page.isFavorite ? "text-yellow-500" : "hover:bg-hover-bg"
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFavorite(page.id);
+            }}
+          >
+            <Star className={cn("h-3 w-3", page.isFavorite && "fill-current")} />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 hover:bg-hover-bg"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPageCreate(page.id);
+            }}
+          >
+            <Plus className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 hover:bg-hover-bg"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStartEdit(page);
+            }}
+          >
+            <Edit2 className="h-3 w-3" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-6 w-6 p-0 hover:bg-hover-bg text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onPageDelete(page.id);
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export function Sidebar({ 
@@ -26,10 +203,19 @@ export function Sidebar({
   onPageSelect, 
   onPageCreate, 
   onPageDelete, 
-  onPageRename 
+  onPageRename,
+  onPageReorder,
+  onToggleFavorite,
 }: SidebarProps) {
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const handleStartEdit = (page: Page) => {
     setEditingPageId(page.id);
@@ -49,106 +235,19 @@ export function Sidebar({
     setEditTitle("");
   };
 
-  const renderPageTree = (pageList: Page[], level = 0) => {
-    return pageList.map((page) => (
-      <div key={page.id} className="select-none">
-        <div
-          className={cn(
-            "group flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer transition-colors duration-150",
-            "hover:bg-hover-bg",
-            currentPageId === page.id && "bg-block-selected",
-            level > 0 && "ml-4"
-          )}
-          style={{ paddingLeft: `${8 + level * 16}px` }}
-        >
-          {page.children && page.children.length > 0 ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-4 w-4 p-0 hover:bg-transparent"
-              onClick={(e) => {
-                e.stopPropagation();
-                // Toggle expansion logic would go here
-              }}
-            >
-              {page.isExpanded ? (
-                <ChevronDown className="h-3 w-3" />
-              ) : (
-                <ChevronRight className="h-3 w-3" />
-              )}
-            </Button>
-          ) : (
-            <div className="w-4" />
-          )}
-          
-          <FileText className="h-4 w-4 text-text-tertiary flex-shrink-0" />
-          
-          {editingPageId === page.id ? (
-            <Input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              onBlur={handleSaveEdit}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveEdit();
-                if (e.key === "Escape") handleCancelEdit();
-              }}
-              className="h-6 text-sm border-none shadow-none p-0 bg-transparent focus-visible:ring-0"
-              autoFocus
-            />
-          ) : (
-            <span
-              className="text-sm text-text-primary truncate flex-1 min-w-0"
-              onClick={() => onPageSelect(page)}
-            >
-              {page.title}
-            </span>
-          )}
-          
-          <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-hover-bg"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPageCreate(page.id);
-              }}
-            >
-              <Plus className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-hover-bg"
-              onClick={(e) => {
-                e.stopPropagation();
-                handleStartEdit(page);
-              }}
-            >
-              <Edit2 className="h-3 w-3" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-hover-bg text-destructive"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPageDelete(page.id);
-              }}
-            >
-              <Trash2 className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-        
-        {page.children && page.isExpanded && (
-          <div className="ml-2">
-            {renderPageTree(page.children, level + 1)}
-          </div>
-        )}
-      </div>
-    ));
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = pages.findIndex((page) => page.id === active.id);
+      const newIndex = pages.findIndex((page) => page.id === over.id);
+
+      onPageReorder(arrayMove(pages, oldIndex, newIndex));
+    }
   };
+
+  const favoritePages = pages.filter(p => p.isFavorite);
+  const regularPages = pages.filter(p => !p.isFavorite);
 
   return (
     <div className="w-64 h-screen bg-sidebar-bg border-r border-border-light flex flex-col">
@@ -167,11 +266,7 @@ export function Sidebar({
       </div>
       
       <div className="flex-1 overflow-y-auto p-2">
-        <div className="space-y-1">
-          {renderPageTree(pages)}
-        </div>
-        
-        {pages.length === 0 && (
+        {pages.length === 0 ? (
           <div className="p-4 text-center">
             <p className="text-text-tertiary text-sm mb-3">No pages yet</p>
             <Button
@@ -183,6 +278,86 @@ export function Sidebar({
               <Plus className="h-4 w-4 mr-2" />
               Create your first page
             </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {favoritePages.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-text-tertiary px-2 mb-2">
+                  FAVORITES
+                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={favoritePages.map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1">
+                      {favoritePages.map((page) => (
+                        <SortablePageItem
+                          key={page.id}
+                          page={page}
+                          level={0}
+                          currentPageId={currentPageId}
+                          editingPageId={editingPageId}
+                          editTitle={editTitle}
+                          onPageSelect={onPageSelect}
+                          onStartEdit={handleStartEdit}
+                          onSaveEdit={handleSaveEdit}
+                          onCancelEdit={handleCancelEdit}
+                          setEditTitle={setEditTitle}
+                          onPageCreate={onPageCreate}
+                          onPageDelete={onPageDelete}
+                          onToggleFavorite={onToggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            )}
+
+            {regularPages.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-text-tertiary px-2 mb-2">
+                  PAGES
+                </div>
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragEnd={handleDragEnd}
+                >
+                  <SortableContext
+                    items={regularPages.map(p => p.id)}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    <div className="space-y-1">
+                      {regularPages.map((page) => (
+                        <SortablePageItem
+                          key={page.id}
+                          page={page}
+                          level={0}
+                          currentPageId={currentPageId}
+                          editingPageId={editingPageId}
+                          editTitle={editTitle}
+                          onPageSelect={onPageSelect}
+                          onStartEdit={handleStartEdit}
+                          onSaveEdit={handleSaveEdit}
+                          onCancelEdit={handleCancelEdit}
+                          setEditTitle={setEditTitle}
+                          onPageCreate={onPageCreate}
+                          onPageDelete={onPageDelete}
+                          onToggleFavorite={onToggleFavorite}
+                        />
+                      ))}
+                    </div>
+                  </SortableContext>
+                </DndContext>
+              </div>
+            )}
           </div>
         )}
       </div>
