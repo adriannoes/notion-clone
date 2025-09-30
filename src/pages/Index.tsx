@@ -1,6 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Sidebar, type Page } from "@/components/Sidebar";
 import { Editor, type Block } from "@/components/Editor";
+import { GlobalSearch } from "@/components/GlobalSearch";
+import { Breadcrumbs } from "@/components/Breadcrumbs";
+import { TemplateSelector, type TemplateType } from "@/components/TemplateSelector";
 
 interface PageData {
   id: string;
@@ -9,11 +12,13 @@ interface PageData {
 }
 
 const Index = () => {
+  const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [pages, setPages] = useState<Page[]>([
     {
       id: "welcome",
       title: "Welcome to Notion Clone",
       isExpanded: false,
+      isFavorite: false,
     },
   ]);
   
@@ -95,38 +100,34 @@ const Index = () => {
   };
 
   const handlePageCreate = (parentId?: string) => {
+    setShowTemplateSelector(true);
+  };
+
+  const handleTemplateSelect = (template: TemplateType, blocks: Block[]) => {
     const newPageId = Math.random().toString(36).substring(2);
+    
+    const templateTitles: Record<TemplateType, string> = {
+      blank: "Untitled",
+      todo: "Todo List",
+      meeting: "Meeting Notes",
+      code: "Code Documentation",
+      brainstorm: "Brainstorm"
+    };
+    
     const newPage: Page = {
       id: newPageId,
-      title: "Untitled",
+      title: templateTitles[template],
       isExpanded: false,
+      isFavorite: false,
     };
 
     const newPageData: PageData = {
       id: newPageId,
-      title: "Untitled",
-      blocks: [
-        {
-          id: Math.random().toString(36).substring(2),
-          type: "paragraph",
-          content: "",
-        },
-      ],
+      title: templateTitles[template],
+      blocks: blocks,
     };
 
-    // Add to pages list
-    if (parentId) {
-      // Add as child (simplified - would need recursive logic for deep nesting)
-      setPages(prev => prev.map(p => 
-        p.id === parentId 
-          ? { ...p, children: [...(p.children || []), newPage], isExpanded: true }
-          : p
-      ));
-    } else {
-      setPages(prev => [...prev, newPage]);
-    }
-
-    // Add page data
+    setPages(prev => [...prev, newPage]);
     setPageData(prev => ({ ...prev, [newPageId]: newPageData }));
     setCurrentPageId(newPageId);
   };
@@ -178,6 +179,20 @@ const Index = () => {
     }));
   };
 
+  const handlePageReorder = (newPages: Page[]) => {
+    setPages(newPages);
+  };
+
+  const handleToggleFavorite = (pageId: string) => {
+    setPages(prev => prev.map(p => 
+      p.id === pageId ? { ...p, isFavorite: !p.isFavorite } : p
+    ));
+  };
+
+  const handleSearchPageSelect = (pageId: string) => {
+    setCurrentPageId(pageId);
+  };
+
   return (
     <div className="flex min-h-screen bg-background font-inter">
       <Sidebar
@@ -187,23 +202,48 @@ const Index = () => {
         onPageCreate={handlePageCreate}
         onPageDelete={handlePageDelete}
         onPageRename={handlePageRename}
+        onPageReorder={handlePageReorder}
+        onToggleFavorite={handleToggleFavorite}
       />
       
-      {currentPage ? (
-        <Editor
-          title={currentPage.title}
-          blocks={currentPage.blocks}
-          onTitleChange={handleTitleChange}
-          onBlocksChange={handleBlocksChange}
-        />
-      ) : (
-        <div className="flex-1 flex items-center justify-center bg-editor-bg">
-          <div className="text-center">
-            <h2 className="text-2xl font-semibold text-text-primary mb-2">No page selected</h2>
-            <p className="text-text-secondary">Select a page from the sidebar to start editing</p>
-          </div>
+      <div className="flex-1 flex flex-col">
+        {/* Top Bar */}
+        <div className="h-14 border-b border-border-light bg-background flex items-center justify-between px-6">
+          <Breadcrumbs
+            currentPageId={currentPageId}
+            pages={pages}
+            onPageSelect={(pageId) => setCurrentPageId(pageId)}
+          />
+          <GlobalSearch
+            pages={pages}
+            pageData={pageData}
+            onPageSelect={handleSearchPageSelect}
+          />
         </div>
-      )}
+
+        {/* Editor */}
+        {currentPage ? (
+          <Editor
+            title={currentPage.title}
+            blocks={currentPage.blocks}
+            onTitleChange={handleTitleChange}
+            onBlocksChange={handleBlocksChange}
+          />
+        ) : (
+          <div className="flex-1 flex items-center justify-center bg-editor-bg">
+            <div className="text-center">
+              <h2 className="text-2xl font-semibold text-text-primary mb-2">No page selected</h2>
+              <p className="text-text-secondary">Select a page from the sidebar to start editing</p>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <TemplateSelector
+        isOpen={showTemplateSelector}
+        onClose={() => setShowTemplateSelector(false)}
+        onSelect={handleTemplateSelect}
+      />
     </div>
   );
 };
