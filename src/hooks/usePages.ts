@@ -27,7 +27,7 @@ export function useCreatePage() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (page: PageInsert) => {
+    mutationFn: async (page: Omit<PageInsert, 'user_id'>) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
