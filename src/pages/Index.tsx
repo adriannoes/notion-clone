@@ -324,15 +324,6 @@ const Index = () => {
               lastSaved={titleAutoSave.lastSaved || blocksAutoSave.lastSaved}
             />
             <GlobalSearch
-              pages={sidebarPages}
-              pageData={pages.reduce((acc, page) => {
-                acc[page.id] = {
-                  id: page.id,
-                  title: page.title,
-                  blocks: [], // We'll fetch blocks on demand in search
-                };
-                return acc;
-              }, {} as Record<string, any>)}
               onPageSelect={handleSearchPageSelect}
             />
           </div>
