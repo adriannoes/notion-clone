@@ -12,6 +12,7 @@ import { useAutoSave } from "@/hooks/useAutoSave";
 import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages } from "@/hooks/usePages";
 import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type Block as DBBlock } from "@/hooks/useBlocks";
 import { useToast } from "@/hooks/use-toast";
+import { usePageHierarchy } from "@/hooks/usePageHierarchy";
 
 // Convert DB blocks to Editor blocks
 const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
@@ -27,6 +28,8 @@ const Index = () => {
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [localTitle, setLocalTitle] = useState("");
   const [localBlocks, setLocalBlocks] = useState<EditorBlock[]>([]);
+  const [expandedPageIds, setExpandedPageIds] = useState<Set<string>>(new Set());
+  const [newPageParentId, setNewPageParentId] = useState<string | null>(null);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -109,7 +112,8 @@ const Index = () => {
     setLocalTitle(page.title);
   }, []);
 
-  const handlePageCreate = useCallback(() => {
+  const handlePageCreate = useCallback((parentId?: string) => {
+    setNewPageParentId(parentId || null);
     setShowTemplateSelector(true);
   }, []);
 
@@ -128,6 +132,7 @@ const Index = () => {
         const result = await createPageMutation.mutateAsync({
           title: templateTitles[template],
           position: pages.length,
+          parent_id: newPageParentId,
         });
 
         // Create blocks for the new page
@@ -147,6 +152,7 @@ const Index = () => {
         setCurrentPageId(result.id);
         setLocalTitle(result.title);
         setShowTemplateSelector(false);
+        setNewPageParentId(null);
 
         toast({
           title: "Página criada",
@@ -276,6 +282,21 @@ const Index = () => {
     }
   }, [pages]);
 
+  const handleToggleExpand = useCallback((pageId: string) => {
+    setExpandedPageIds(prev => {
+      const next = new Set(prev);
+      if (next.has(pageId)) {
+        next.delete(pageId);
+      } else {
+        next.add(pageId);
+      }
+      return next;
+    });
+  }, []);
+
+  // Use hierarchy hook
+  const hierarchicalPages = usePageHierarchy(pages, expandedPageIds);
+
   // Show loading state
   if (pagesLoading) {
     return (
@@ -289,12 +310,15 @@ const Index = () => {
     );
   }
 
-  // Convert pages to sidebar format
-  const sidebarPages: SidebarPage[] = pages.map(p => ({
+  // Convert pages to sidebar format with hierarchy
+  const sidebarPages: SidebarPage[] = hierarchicalPages.map(p => ({
     id: p.id,
     title: p.title,
-    isExpanded: false,
+    isExpanded: expandedPageIds.has(p.id),
     isFavorite: p.is_favorite || false,
+    level: p.level,
+    hasChildren: p.children.length > 0,
+    parent_id: p.parent_id,
   }));
 
   return (
@@ -308,6 +332,9 @@ const Index = () => {
         onPageRename={handlePageRename}
         onPageReorder={handlePageReorder}
         onToggleFavorite={handleToggleFavorite}
+        expandedPageIds={expandedPageIds}
+        onToggleExpand={handleToggleExpand}
+        allPages={pages}
       />
 
       <div className="flex-1 flex flex-col">
