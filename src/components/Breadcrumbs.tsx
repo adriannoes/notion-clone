@@ -9,20 +9,23 @@ interface BreadcrumbsProps {
 }
 
 export function Breadcrumbs({ currentPageId, pages, onPageSelect }: BreadcrumbsProps) {
-  const findPagePath = (pageId: string, pageList: Page[], path: Page[] = []): Page[] | null => {
-    for (const page of pageList) {
-      if (page.id === pageId) {
-        return [...path, page];
-      }
-      if (page.children) {
-        const childPath = findPagePath(pageId, page.children, [...path, page]);
-        if (childPath) return childPath;
+  const findPagePath = (pageId: string): Page[] => {
+    const path: Page[] = [];
+    let currentPage = pages.find(p => p.id === pageId);
+    
+    while (currentPage) {
+      path.unshift(currentPage);
+      if (currentPage.parent_id) {
+        currentPage = pages.find(p => p.id === currentPage!.parent_id);
+      } else {
+        currentPage = undefined;
       }
     }
-    return null;
+    
+    return path;
   };
 
-  const path = findPagePath(currentPageId, pages);
+  const path = findPagePath(currentPageId);
 
   if (!path || path.length === 0) return null;
 

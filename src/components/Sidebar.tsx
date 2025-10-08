@@ -24,9 +24,11 @@ import { CSS } from '@dnd-kit/utilities';
 export interface Page {
   id: string;
   title: string;
-  children?: Page[];
   isExpanded?: boolean;
   isFavorite?: boolean;
+  level?: number;
+  hasChildren?: boolean;
+  parent_id?: string | null;
 }
 
 interface SidebarProps {
@@ -38,11 +40,13 @@ interface SidebarProps {
   onPageRename: (pageId: string, newTitle: string) => void;
   onPageReorder: (pages: Page[]) => void;
   onToggleFavorite: (pageId: string) => void;
+  expandedPageIds: Set<string>;
+  onToggleExpand: (pageId: string) => void;
+  allPages: any[];
 }
 
 interface SortablePageItemProps {
   page: Page;
-  level: number;
   currentPageId?: string;
   editingPageId: string | null;
   editTitle: string;
@@ -54,11 +58,11 @@ interface SortablePageItemProps {
   onPageCreate: (parentId?: string) => void;
   onPageDelete: (pageId: string) => void;
   onToggleFavorite: (pageId: string) => void;
+  onToggleExpand: (pageId: string) => void;
 }
 
 function SortablePageItem({
   page,
-  level,
   currentPageId,
   editingPageId,
   editTitle,
@@ -70,6 +74,7 @@ function SortablePageItem({
   onPageCreate,
   onPageDelete,
   onToggleFavorite,
+  onToggleExpand,
 }: SortablePageItemProps) {
   const {
     attributes,
@@ -86,14 +91,15 @@ function SortablePageItem({
     opacity: isDragging ? 0.5 : 1,
   };
 
+  const level = page.level || 0;
+
   return (
     <div ref={setNodeRef} style={style}>
       <div
         className={cn(
           "group flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer transition-colors duration-150",
           "hover:bg-hover-bg",
-          currentPageId === page.id && "bg-block-selected",
-          level > 0 && "ml-4"
+          currentPageId === page.id && "bg-block-selected"
         )}
         style={{ paddingLeft: `${8 + level * 16}px` }}
       >
@@ -101,13 +107,14 @@ function SortablePageItem({
           <GripVertical className="h-3 w-3 text-text-tertiary opacity-0 group-hover:opacity-100" />
         </div>
 
-        {page.children && page.children.length > 0 ? (
+        {page.hasChildren ? (
           <Button
             variant="ghost"
             size="sm"
             className="h-4 w-4 p-0 hover:bg-transparent"
             onClick={(e) => {
               e.stopPropagation();
+              onToggleExpand(page.id);
             }}
           >
             {page.isExpanded ? (
@@ -206,6 +213,9 @@ export function Sidebar({
   onPageRename,
   onPageReorder,
   onToggleFavorite,
+  expandedPageIds,
+  onToggleExpand,
+  allPages,
 }: SidebarProps) {
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -238,12 +248,30 @@ export function Sidebar({
   const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
 
-    if (over && active.id !== over.id) {
-      const oldIndex = pages.findIndex((page) => page.id === active.id);
-      const newIndex = pages.findIndex((page) => page.id === over.id);
+    if (!over || active.id === over.id) return;
 
-      onPageReorder(arrayMove(pages, oldIndex, newIndex));
+    const draggedPage = allPages.find(p => p.id === active.id);
+    const targetPage = allPages.find(p => p.id === over.id);
+    
+    if (!draggedPage || !targetPage) return;
+
+    // Check if trying to make a page child of its own descendant (prevent cycles)
+    const isDescendant = (pageId: string, potentialAncestorId: string): boolean => {
+      const page = allPages.find(p => p.id === pageId);
+      if (!page || !page.parent_id) return false;
+      if (page.parent_id === potentialAncestorId) return true;
+      return isDescendant(page.parent_id, potentialAncestorId);
+    };
+
+    if (isDescendant(targetPage.id, draggedPage.id)) {
+      return; // Prevent cycle
     }
+
+    // Simple reordering within same level for now
+    const oldIndex = pages.findIndex((page) => page.id === active.id);
+    const newIndex = pages.findIndex((page) => page.id === over.id);
+
+    onPageReorder(arrayMove(pages, oldIndex, newIndex));
   };
 
   const favoritePages = pages.filter(p => p.isFavorite);
@@ -300,7 +328,6 @@ export function Sidebar({
                         <SortablePageItem
                           key={page.id}
                           page={page}
-                          level={0}
                           currentPageId={currentPageId}
                           editingPageId={editingPageId}
                           editTitle={editTitle}
@@ -312,6 +339,7 @@ export function Sidebar({
                           onPageCreate={onPageCreate}
                           onPageDelete={onPageDelete}
                           onToggleFavorite={onToggleFavorite}
+                          onToggleExpand={onToggleExpand}
                         />
                       ))}
                     </div>
@@ -339,7 +367,6 @@ export function Sidebar({
                         <SortablePageItem
                           key={page.id}
                           page={page}
-                          level={0}
                           currentPageId={currentPageId}
                           editingPageId={editingPageId}
                           editTitle={editTitle}
@@ -351,6 +378,7 @@ export function Sidebar({
                           onPageCreate={onPageCreate}
                           onPageDelete={onPageDelete}
                           onToggleFavorite={onToggleFavorite}
+                          onToggleExpand={onToggleExpand}
                         />
                       ))}
                     </div>
