@@ -13,6 +13,9 @@ import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages,
 import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type Block as DBBlock } from "@/hooks/useBlocks";
 import { useToast } from "@/hooks/use-toast";
 import { usePageHierarchy } from "@/hooks/usePageHierarchy";
+import { useAuth } from "@/contexts/AuthContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { SaveAsTemplateButton } from "@/components/SaveAsTemplateButton";
 
 // Convert DB blocks to Editor blocks
 const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
@@ -33,6 +36,7 @@ const Index = () => {
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
   
   // Fetch data from Lovable Cloud
   const { data: pages = [], isLoading: pagesLoading } = usePages();
@@ -98,6 +102,31 @@ const Index = () => {
       });
     },
   });
+
+  // Load expanded pages from localStorage on mount
+  useEffect(() => {
+    if (user?.id) {
+      const storageKey = `notion-expanded-pages-${user.id}`;
+      const savedExpanded = localStorage.getItem(storageKey);
+      if (savedExpanded) {
+        try {
+          const expandedArray = JSON.parse(savedExpanded);
+          setExpandedPageIds(new Set(expandedArray));
+        } catch (error) {
+          console.warn('Failed to parse expanded pages from localStorage:', error);
+        }
+      }
+    }
+  }, [user?.id]);
+
+  // Save expanded pages to localStorage when they change
+  useEffect(() => {
+    if (user?.id && expandedPageIds.size > 0) {
+      const storageKey = `notion-expanded-pages-${user.id}`;
+      const expandedArray = Array.from(expandedPageIds);
+      localStorage.setItem(storageKey, JSON.stringify(expandedArray));
+    }
+  }, [expandedPageIds, user?.id]);
 
   // Set initial page when pages load
   useEffect(() => {
@@ -370,6 +399,14 @@ const Index = () => {
               status={titleAutoSave.status === "idle" ? blocksAutoSave.status : titleAutoSave.status}
               lastSaved={titleAutoSave.lastSaved || blocksAutoSave.lastSaved}
             />
+            {currentPage && (
+              <SaveAsTemplateButton
+                title={localTitle}
+                blocks={localBlocks}
+                disabled={localBlocks.length === 0}
+              />
+            )}
+            <ThemeToggle />
             <GlobalSearch
               onPageSelect={handleSearchPageSelect}
             />
