@@ -1,6 +1,8 @@
-import { FileText, CheckSquare, Calendar, Code, Lightbulb } from "lucide-react";
+import { FileText, CheckSquare, Calendar, Code, Lightbulb, User, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useTemplates, useDeleteTemplate } from "@/hooks/useTemplates";
 import type { Block } from "@/components/Editor";
 
 export type TemplateType = "blank" | "todo" | "meeting" | "code" | "brainstorm";
@@ -95,36 +97,103 @@ const templates: Template[] = [
 ];
 
 export function TemplateSelector({ isOpen, onClose, onSelect }: TemplateSelectorProps) {
+  const { data: userTemplates = [], isLoading } = useTemplates();
+  const deleteTemplateMutation = useDeleteTemplate();
+
   const handleSelect = (template: Template) => {
     onSelect(template.id, template.blocks);
     onClose();
   };
 
+  const handleSelectUserTemplate = (template: any) => {
+    // Parse the blocks from JSON
+    const blocks = JSON.parse(template.blocks || '[]');
+    onSelect('blank' as TemplateType, blocks);
+    onClose();
+  };
+
+  const handleDeleteUserTemplate = async (templateId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('Tem certeza que deseja deletar este template?')) {
+      await deleteTemplateMutation.mutateAsync(templateId);
+    }
+  };
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Choose a template</DialogTitle>
+          <DialogTitle>Escolher template</DialogTitle>
         </DialogHeader>
         
-        <div className="grid grid-cols-2 gap-3 mt-4">
-          {templates.map((template) => (
-            <Button
-              key={template.id}
-              variant="outline"
-              onClick={() => handleSelect(template)}
-              className="h-auto flex-col items-start p-4 hover:bg-hover-bg hover:border-primary"
-            >
-              <div className="flex items-center gap-2 mb-2 text-primary">
-                {template.icon}
-                <span className="font-semibold">{template.name}</span>
+        <Tabs defaultValue="default" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="default">Templates Padrão</TabsTrigger>
+            <TabsTrigger value="custom">Meus Templates</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="default" className="mt-4">
+            <div className="grid grid-cols-2 gap-3">
+              {templates.map((template) => (
+                <Button
+                  key={template.id}
+                  variant="outline"
+                  onClick={() => handleSelect(template)}
+                  className="h-auto flex-col items-start p-4 hover:bg-hover-bg hover:border-primary"
+                >
+                  <div className="flex items-center gap-2 mb-2 text-primary">
+                    {template.icon}
+                    <span className="font-semibold">{template.name}</span>
+                  </div>
+                  <p className="text-xs text-text-tertiary text-left">
+                    {template.description}
+                  </p>
+                </Button>
+              ))}
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="custom" className="mt-4">
+            {isLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
               </div>
-              <p className="text-xs text-text-tertiary text-left">
-                {template.description}
-              </p>
-            </Button>
-          ))}
-        </div>
+            ) : userTemplates.length === 0 ? (
+              <div className="text-center py-8 text-text-tertiary">
+                <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Você ainda não criou nenhum template personalizado.</p>
+                <p className="text-sm">Crie uma página e salve-a como template!</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {userTemplates.map((template) => (
+                  <Button
+                    key={template.id}
+                    variant="outline"
+                    onClick={() => handleSelectUserTemplate(template)}
+                    className="h-auto flex-col items-start p-4 hover:bg-hover-bg hover:border-primary group relative"
+                  >
+                    <div className="flex items-center gap-2 mb-2 text-primary w-full">
+                      <User className="h-5 w-5" />
+                      <span className="font-semibold flex-1">{template.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => handleDeleteUserTemplate(template.id, e)}
+                      >
+                        <Trash2 className="h-3 w-3 text-destructive" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-text-tertiary text-left">
+                      {template.description || 'Template personalizado'}
+                    </p>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );
