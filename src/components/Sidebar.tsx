@@ -3,14 +3,19 @@ import { ChevronDown, ChevronRight, Plus, FileText, Trash2, Edit2, Star, GripVer
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
-  closestCenter,
+  pointerWithin,
+  rectIntersection,
   KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
   DragEndEvent,
+  DragStartEvent,
+  DragOverEvent,
+  type CollisionDetection,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -40,6 +45,7 @@ interface SidebarProps {
   onPageRename: (pageId: string, newTitle: string) => void;
   onPageReorder: (pages: Page[]) => void;
   onToggleFavorite: (pageId: string) => void;
+  onUpdatePageParent: (pageId: string, newParentId: string | null) => void;
   expandedPageIds: Set<string>;
   onToggleExpand: (pageId: string) => void;
   allPages: any[];
@@ -59,6 +65,8 @@ interface SortablePageItemProps {
   onPageDelete: (pageId: string) => void;
   onToggleFavorite: (pageId: string) => void;
   onToggleExpand: (pageId: string) => void;
+  dropZone: { targetId: string; position: 'over' | 'above' | 'below' } | null;
+  isInvalidTarget: boolean;
 }
 
 function SortablePageItem({
@@ -75,6 +83,8 @@ function SortablePageItem({
   onPageDelete,
   onToggleFavorite,
   onToggleExpand,
+  dropZone,
+  isInvalidTarget,
 }: SortablePageItemProps) {
   const {
     attributes,
@@ -89,17 +99,31 @@ function SortablePageItem({
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    cursor: isInvalidTarget && isDragging ? 'not-allowed' : undefined,
   };
 
   const level = page.level || 0;
+  const showDropIndicator = dropZone?.targetId === page.id;
+  const dropPosition = dropZone?.position;
 
   return (
-    <div ref={setNodeRef} style={style}>
+    <div ref={setNodeRef} style={style} className="relative">
+      {showDropIndicator && dropPosition === 'above' && (
+        <div className="absolute top-0 left-0 right-0 h-0.5 bg-primary z-10" />
+      )}
+      {showDropIndicator && dropPosition === 'below' && (
+        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary z-10" />
+      )}
+      {showDropIndicator && dropPosition === 'over' && (
+        <div className="absolute inset-0 border-2 border-primary rounded-md opacity-50 pointer-events-none" />
+      )}
+      
       <div
         className={cn(
           "group flex items-center gap-1 py-1 px-2 rounded-md cursor-pointer transition-colors duration-150",
           "hover:bg-hover-bg",
-          currentPageId === page.id && "bg-block-selected"
+          currentPageId === page.id && "bg-block-selected",
+          isInvalidTarget && isDragging && "opacity-30"
         )}
         style={{ paddingLeft: `${8 + level * 16}px` }}
       >
@@ -213,12 +237,16 @@ export function Sidebar({
   onPageRename,
   onPageReorder,
   onToggleFavorite,
+  onUpdatePageParent,
   expandedPageIds,
   onToggleExpand,
   allPages,
 }: SidebarProps) {
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
+  const [dropZone, setDropZone] = useState<{ targetId: string; position: 'over' | 'above' | 'below' } | null>(null);
+  const [invalidDropTargets, setInvalidDropTargets] = useState<Set<string>>(new Set());
+  const { toast } = useToast();
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -245,7 +273,78 @@ export function Sidebar({
     setEditTitle("");
   };
 
+  // Helper to get all descendants of a page
+  const getAllDescendants = (pageId: string): string[] => {
+    const children = allPages.filter(p => p.parent_id === pageId);
+    return children.flatMap(child => [
+      child.id,
+      ...getAllDescendants(child.id)
+    ]);
+  };
+
+  // Helper to check if a page is descendant of another
+  const isDescendant = (pageId: string, potentialAncestorId: string): boolean => {
+    const page = allPages.find(p => p.id === pageId);
+    if (!page || !page.parent_id) return false;
+    if (page.parent_id === potentialAncestorId) return true;
+    return isDescendant(page.parent_id, potentialAncestorId);
+  };
+
+  // Custom collision detection
+  const customCollisionDetection: CollisionDetection = (args) => {
+    const pointerCollisions = pointerWithin(args);
+    
+    if (pointerCollisions.length > 0) {
+      return pointerCollisions;
+    }
+    
+    return rectIntersection(args);
+  };
+
+  const handleDragStart = (event: DragStartEvent) => {
+    const draggedId = event.active.id as string;
+    const descendants = getAllDescendants(draggedId);
+    setInvalidDropTargets(new Set([draggedId, ...descendants]));
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { active, over } = event;
+    
+    if (!over || !active) {
+      setDropZone(null);
+      return;
+    }
+
+    const overId = over.id as string;
+    const overElement = over.rect;
+    
+    if (!overElement) {
+      setDropZone(null);
+      return;
+    }
+
+    // Calculate drop position based on cursor Y position
+    const pointerY = event.delta.y + overElement.top + overElement.height / 2;
+    const relativeY = pointerY - overElement.top;
+    const height = overElement.height;
+    
+    let position: 'above' | 'over' | 'below';
+    
+    // Top 30% = above, bottom 30% = below, middle 40% = over (make child)
+    if (relativeY < height * 0.3) {
+      position = 'above';
+    } else if (relativeY > height * 0.7) {
+      position = 'below';
+    } else {
+      position = 'over';
+    }
+    
+    setDropZone({ targetId: overId, position });
+  };
+
   const handleDragEnd = (event: DragEndEvent) => {
+    setDropZone(null);
+    setInvalidDropTargets(new Set());
     const { active, over } = event;
 
     if (!over || active.id === over.id) return;
@@ -316,7 +415,9 @@ export function Sidebar({
                 </div>
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={closestCenter}
+                  collisionDetection={customCollisionDetection}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
                   <SortableContext
@@ -340,6 +441,8 @@ export function Sidebar({
                           onPageDelete={onPageDelete}
                           onToggleFavorite={onToggleFavorite}
                           onToggleExpand={onToggleExpand}
+                          dropZone={dropZone}
+                          isInvalidTarget={invalidDropTargets.has(page.id)}
                         />
                       ))}
                     </div>
@@ -355,7 +458,9 @@ export function Sidebar({
                 </div>
                 <DndContext
                   sensors={sensors}
-                  collisionDetection={closestCenter}
+                  collisionDetection={customCollisionDetection}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
                   onDragEnd={handleDragEnd}
                 >
                   <SortableContext
@@ -379,6 +484,8 @@ export function Sidebar({
                           onPageDelete={onPageDelete}
                           onToggleFavorite={onToggleFavorite}
                           onToggleExpand={onToggleExpand}
+                          dropZone={dropZone}
+                          isInvalidTarget={invalidDropTargets.has(page.id)}
                         />
                       ))}
                     </div>

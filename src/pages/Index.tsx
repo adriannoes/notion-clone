@@ -9,7 +9,7 @@ import { SaveIndicator } from "@/components/SaveIndicator";
 import { SidebarSkeleton } from "@/components/SidebarSkeleton";
 import { EditorSkeleton } from "@/components/EditorSkeleton";
 import { useAutoSave } from "@/hooks/useAutoSave";
-import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages } from "@/hooks/usePages";
+import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages, useUpdatePageParent } from "@/hooks/usePages";
 import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type Block as DBBlock } from "@/hooks/useBlocks";
 import { useToast } from "@/hooks/use-toast";
 import { usePageHierarchy } from "@/hooks/usePageHierarchy";
@@ -44,6 +44,7 @@ const Index = () => {
   const updatePageMutation = useUpdatePage();
   const deletePageMutation = useDeletePage();
   const reorderPagesMutation = useReorderPages();
+  const updatePageParentMutation = useUpdatePageParent();
   const batchUpdateBlocksMutation = useBatchUpdateBlocks();
 
   // Get current page
@@ -294,6 +295,24 @@ const Index = () => {
     });
   }, []);
 
+  const handleUpdatePageParent = useCallback(
+    async (pageId: string, newParentId: string | null) => {
+      // Optimistic update
+      queryClient.setQueryData(["pages"], (old: any[]) =>
+        old.map((p: any) =>
+          p.id === pageId ? { ...p, parent_id: newParentId } : p
+        )
+      );
+
+      try {
+        await updatePageParentMutation.mutateAsync({ pageId, newParentId });
+      } catch (error) {
+        queryClient.invalidateQueries({ queryKey: ["pages"] });
+      }
+    },
+    [updatePageParentMutation, queryClient]
+  );
+
   // Use hierarchy hook
   const hierarchicalPages = usePageHierarchy(pages, expandedPageIds);
 
@@ -332,6 +351,7 @@ const Index = () => {
         onPageRename={handlePageRename}
         onPageReorder={handlePageReorder}
         onToggleFavorite={handleToggleFavorite}
+        onUpdatePageParent={handleUpdatePageParent}
         expandedPageIds={expandedPageIds}
         onToggleExpand={handleToggleExpand}
         allPages={pages}
