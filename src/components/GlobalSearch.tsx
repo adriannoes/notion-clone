@@ -1,14 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, FileText, X } from "lucide-react";
+import { Search, FileText, X, Loader2, Clock } from "lucide-react";
+import { useDebounce } from "use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { Page } from "@/components/Sidebar";
-import type { Block } from "@/components/Editor";
+import { usePages } from "@/hooks/usePages";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 interface GlobalSearchProps {
-  pages: Page[];
-  pageData: Record<string, { id: string; title: string; blocks: Block[] }>;
   onPageSelect: (pageId: string) => void;
 }
 
@@ -19,11 +19,50 @@ interface SearchResult {
   preview?: string;
 }
 
-export function GlobalSearch({ pages, pageData, onPageSelect }: GlobalSearchProps) {
+const MAX_RESULTS = 20;
+const RECENT_SEARCHES_KEY = "notion-recent-searches";
+const MAX_RECENT_SEARCHES = 5;
+
+export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [debouncedQuery] = useDebounce(query, 300);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [isSearching, setIsSearching] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+  
+  const { data: pages = [] } = usePages();
+  const { toast } = useToast();
+
+  // Load recent searches from localStorage
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
+      if (stored) {
+        setRecentSearches(JSON.parse(stored));
+      }
+    } catch (error) {
+      console.error("Failed to load recent searches:", error);
+    }
+  }, []);
+
+  // Save recent search
+  const saveRecentSearch = useCallback((searchQuery: string) => {
+    if (!searchQuery.trim()) return;
+    
+    try {
+      const updated = [
+        searchQuery,
+        ...recentSearches.filter(s => s !== searchQuery)
+      ].slice(0, MAX_RECENT_SEARCHES);
+      
+      setRecentSearches(updated);
+      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+    } catch (error) {
+      console.error("Failed to save recent search:", error);
+    }
+  }, [recentSearches]);
 
   // Keyboard shortcut: Ctrl/Cmd + K
   useEffect(() => {
@@ -42,64 +81,110 @@ export function GlobalSearch({ pages, pageData, onPageSelect }: GlobalSearchProp
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  // Search logic
-  const performSearch = useCallback((searchQuery: string) => {
+  // Async search logic with database queries
+  const performSearch = useCallback(async (searchQuery: string) => {
     if (!searchQuery.trim()) {
       setResults([]);
+      setIsSearching(false);
       return;
     }
 
+    setIsSearching(true);
     const lowerQuery = searchQuery.toLowerCase();
     const searchResults: SearchResult[] = [];
 
-    const searchInPages = (pageList: Page[]) => {
-      pageList.forEach(page => {
-        const data = pageData[page.id];
-        if (!data) return;
+    try {
+      // First, search in page titles (fast, in-memory)
+      const titleMatches = pages.filter(page =>
+        page.title.toLowerCase().includes(lowerQuery)
+      );
 
-        // Search in title
-        if (data.title.toLowerCase().includes(lowerQuery)) {
-          searchResults.push({
-            pageId: page.id,
-            title: data.title,
-            matchType: "title"
+      titleMatches.forEach(page => {
+        if (searchResults.length >= MAX_RESULTS) return;
+        searchResults.push({
+          pageId: page.id,
+          title: page.title,
+          matchType: "title"
+        });
+      });
+
+      // If we haven't reached the limit, search in content
+      if (searchResults.length < MAX_RESULTS) {
+        const remainingSlots = MAX_RESULTS - searchResults.length;
+        
+        // Search in blocks content (requires DB query)
+        const { data: blockMatches, error } = await supabase
+          .from("blocks")
+          .select("page_id, content")
+          .ilike("content", `%${searchQuery}%`)
+          .limit(remainingSlots);
+
+        if (error) {
+          console.error("Search error:", error);
+          toast({
+            title: "Erro na busca",
+            description: "Não foi possível buscar no conteúdo das páginas.",
+            variant: "destructive",
           });
-        } else {
-          // Search in content
-          const contentMatch = data.blocks.find(block => 
-            block.content.toLowerCase().includes(lowerQuery)
-          );
+        } else if (blockMatches) {
+          // Get unique page IDs from block matches
+          const matchedPageIds = new Set(blockMatches.map(b => b.page_id));
           
-          if (contentMatch) {
-            const preview = contentMatch.content.substring(0, 100);
+          matchedPageIds.forEach(pageId => {
+            if (searchResults.length >= MAX_RESULTS) return;
+            
+            // Skip if already in results (title match)
+            if (searchResults.some(r => r.pageId === pageId)) return;
+            
+            const page = pages.find(p => p.id === pageId);
+            if (!page) return;
+
+            const blockMatch = blockMatches.find(b => b.page_id === pageId);
+            const preview = blockMatch?.content?.substring(0, 100) || "";
+
             searchResults.push({
               pageId: page.id,
-              title: data.title,
+              title: page.title,
               matchType: "content",
               preview
             });
-          }
+          });
         }
+      }
 
-        if (page.children) {
-          searchInPages(page.children);
-        }
+      setResults(searchResults);
+      setSelectedIndex(0);
+    } catch (error) {
+      console.error("Search error:", error);
+      toast({
+        title: "Erro na busca",
+        description: "Ocorreu um erro ao realizar a busca.",
+        variant: "destructive",
       });
-    };
+    } finally {
+      setIsSearching(false);
+    }
+  }, [pages, toast]);
 
-    searchInPages(pages);
-    setResults(searchResults);
-    setSelectedIndex(0);
-  }, [pages, pageData]);
-
+  // Debounced search effect
   useEffect(() => {
-    performSearch(query);
-  }, [query, performSearch]);
+    if (debouncedQuery) {
+      performSearch(debouncedQuery);
+    } else {
+      setResults([]);
+      setIsSearching(false);
+    }
+  }, [debouncedQuery, performSearch]);
 
   const handleSelect = (pageId: string) => {
+    saveRecentSearch(query);
     onPageSelect(pageId);
     setIsOpen(false);
     setQuery("");
+  };
+
+  const handleRecentSearchClick = (recentQuery: string) => {
+    setQuery(recentQuery);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -162,19 +247,49 @@ export function GlobalSearch({ pages, pageData, onPageSelect }: GlobalSearchProp
 
           {/* Results */}
           <div className="max-h-[400px] overflow-y-auto p-2">
-            {results.length === 0 && query && (
-              <div className="py-8 text-center text-text-tertiary text-sm">
-                No results found for "{query}"
-              </div>
-            )}
-            
-            {results.length === 0 && !query && (
-              <div className="py-8 text-center text-text-tertiary text-sm">
-                Start typing to search pages...
+            {/* Loading State */}
+            {isSearching && (
+              <div className="flex items-center justify-center py-8 gap-2 text-text-tertiary">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span className="text-sm">Buscando...</span>
               </div>
             )}
 
-            {results.map((result, index) => (
+            {/* No Results */}
+            {!isSearching && results.length === 0 && query && (
+              <div className="py-8 text-center text-text-tertiary text-sm">
+                Nenhum resultado para "{query}"
+              </div>
+            )}
+            
+            {/* Recent Searches */}
+            {!isSearching && results.length === 0 && !query && recentSearches.length > 0 && (
+              <div className="py-2">
+                <div className="text-xs font-medium text-text-tertiary px-3 mb-2">
+                  Buscas recentes
+                </div>
+                {recentSearches.map((recentQuery, index) => (
+                  <div
+                    key={index}
+                    onClick={() => handleRecentSearchClick(recentQuery)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer hover:bg-hover-bg transition-colors"
+                  >
+                    <Clock className="h-4 w-4 text-text-tertiary flex-shrink-0" />
+                    <span className="text-sm text-text-secondary">{recentQuery}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {!isSearching && results.length === 0 && !query && recentSearches.length === 0 && (
+              <div className="py-8 text-center text-text-tertiary text-sm">
+                Digite para buscar páginas...
+              </div>
+            )}
+
+            {/* Search Results */}
+            {!isSearching && results.map((result, index) => (
               <div
                 key={result.pageId}
                 onClick={() => handleSelect(result.pageId)}

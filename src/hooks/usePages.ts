@@ -134,3 +134,39 @@ export function useReorderPages() {
     },
   });
 }
+
+export function useUpdatePageParent() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: async ({ 
+      pageId, 
+      newParentId 
+    }: { 
+      pageId: string; 
+      newParentId: string | null;
+    }) => {
+      const { data, error } = await supabase
+        .from('pages')
+        .update({ parent_id: newParentId })
+        .eq('id', pageId)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['pages'] });
+      toast({ title: 'Página movida!' });
+    },
+    onError: (error) => {
+      toast({
+        variant: 'destructive',
+        title: 'Erro ao mover página',
+        description: error.message,
+      });
+    },
+  });
+}
