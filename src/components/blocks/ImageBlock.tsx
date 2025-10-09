@@ -1,7 +1,9 @@
 import { useState, useRef } from "react";
-import { Upload, X, ExternalLink } from "lucide-react";
+import { Upload, X, ExternalLink, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { uploadImage, deleteImage, isStorageUrl, dataUrlToFile } from "@/lib/storage";
+import { useToast } from "@/hooks/use-toast";
 
 interface ImageBlockProps {
   content: string;
@@ -12,33 +14,61 @@ interface ImageBlockProps {
 
 export function ImageBlock({ content, onChange, onDelete, isHovered }: ImageBlockProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = async (file: File) => {
     if (file && file.type.startsWith('image/')) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        onChange(result);
-      };
-      reader.readAsDataURL(file);
+      setIsUploading(true);
+      try {
+        // Upload to Supabase Storage
+        const imageUrl = await uploadImage(file);
+        onChange(imageUrl);
+        
+        toast({
+          title: "Imagem carregada",
+          description: "A imagem foi salva com sucesso.",
+        });
+      } catch (error) {
+        console.error('Upload failed:', error);
+        toast({
+          variant: "destructive",
+          title: "Erro ao carregar imagem",
+          description: "Não foi possível fazer upload da imagem.",
+        });
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
     const files = Array.from(e.dataTransfer.files);
     if (files[0]) {
-      handleFileSelect(files[0]);
+      await handleFileSelect(files[0]);
     }
   };
 
-  const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInput = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      handleFileSelect(file);
+      await handleFileSelect(file);
     }
+  };
+
+  const handleDelete = async () => {
+    // Delete from storage if it's a storage URL
+    if (isStorageUrl(content)) {
+      try {
+        await deleteImage(content);
+      } catch (error) {
+        console.warn('Failed to delete image from storage:', error);
+      }
+    }
+    onDelete();
   };
 
   if (!content) {
@@ -53,13 +83,20 @@ export function ImageBlock({ content, onChange, onDelete, isHovered }: ImageBloc
         onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
         onDragLeave={() => setIsDragging(false)}
       >
-        <Upload className="h-8 w-8 text-text-tertiary mx-auto mb-4" />
-        <p className="text-text-secondary mb-2">Drop an image or click to upload</p>
+        {isUploading ? (
+          <Loader2 className="h-8 w-8 text-text-tertiary mx-auto mb-4 animate-spin" />
+        ) : (
+          <Upload className="h-8 w-8 text-text-tertiary mx-auto mb-4" />
+        )}
+        <p className="text-text-secondary mb-2">
+          {isUploading ? "Carregando imagem..." : "Drop an image or click to upload"}
+        </p>
         <Button
           variant="outline"
           onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
         >
-          Upload Image
+          {isUploading ? "Carregando..." : "Upload Image"}
         </Button>
         <input
           ref={fileInputRef}
@@ -93,7 +130,7 @@ export function ImageBlock({ content, onChange, onDelete, isHovered }: ImageBloc
             variant="destructive"
             size="sm"
             className="h-8 w-8 p-0"
-            onClick={onDelete}
+            onClick={handleDelete}
           >
             <X className="h-4 w-4" />
           </Button>
