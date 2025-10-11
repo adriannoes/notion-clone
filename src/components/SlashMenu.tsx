@@ -1,17 +1,18 @@
 import { useState, useEffect } from "react";
-import { 
-  Type, 
-  Heading1, 
-  Heading2, 
-  Heading3, 
-  List, 
-  ListOrdered, 
-  Image, 
-  Code, 
-  Quote, 
-  Info, 
+import {
+  Type,
+  Heading1,
+  Heading2,
+  Heading3,
+  List,
+  ListOrdered,
+  Image,
+  Code,
+  Quote,
+  Info,
   ChevronRight,
-  Minus
+  Minus,
+  Table
 } from "lucide-react";
 import { BlockType } from "@/components/Editor";
 import { cn } from "@/lib/utils";
@@ -94,14 +95,21 @@ const BLOCK_OPTIONS = [
     icon: Info,
     keywords: ["callout", "info", "note", "warning"]
   },
-  { 
-    type: "toggle" as BlockType, 
-    label: "Toggle", 
-    description: "Create a toggleable section.", 
+  {
+    type: "toggle" as BlockType,
+    label: "Toggle",
+    description: "Create a toggleable section.",
     icon: ChevronRight,
     keywords: ["toggle", "collapse", "expand"]
   },
-  { 
+  {
+    type: "table" as BlockType,
+    label: "Table",
+    description: "Create a table with rows and columns.",
+    icon: Table,
+    keywords: ["table", "spreadsheet", "grid"]
+  },
+  {
     type: "divider" as BlockType, 
     label: "Divider", 
     description: "Visually divide blocks.", 

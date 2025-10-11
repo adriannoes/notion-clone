@@ -18,6 +18,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { SaveAsTemplateButton } from "@/components/SaveAsTemplateButton";
 import { WorkspaceSelector } from "@/components/WorkspaceSelector";
 import { VersionHistory } from "@/components/VersionHistory";
+import { ExportDropdown } from "@/components/ExportDropdown";
 import { useCanEdit, useCanDelete } from "@/hooks/usePermissions";
 import { History } from "lucide-react";
 
@@ -434,6 +435,14 @@ const Index = () => {
                 Histórico
               </Button>
             )}
+            <ExportDropdown
+              title={localTitle}
+              blocks={localBlocks}
+              onImport={(title, blocks) => {
+                setLocalTitle(title);
+                setLocalBlocks(blocks);
+              }}
+            />
             <ThemeToggle />
             <GlobalSearch
               onPageSelect={handleSearchPageSelect}

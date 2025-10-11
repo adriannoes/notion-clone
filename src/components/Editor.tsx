@@ -8,9 +8,10 @@ import { QuoteBlock } from "@/components/blocks/QuoteBlock";
 import { CodeBlock } from "@/components/blocks/CodeBlock";
 import { CalloutBlock } from "@/components/blocks/CalloutBlock";
 import { ToggleBlock } from "@/components/blocks/ToggleBlock";
+import { TableBlock, type TableMetadata } from "@/components/blocks/TableBlock";
 import { SlashMenu } from "@/components/SlashMenu";
 
-export type BlockType = "paragraph" | "heading1" | "heading2" | "heading3" | "bulleted-list" | "numbered-list" | "divider" | "image" | "code" | "quote" | "callout" | "toggle";
+export type BlockType = "paragraph" | "heading1" | "heading2" | "heading3" | "bulleted-list" | "numbered-list" | "divider" | "image" | "code" | "quote" | "callout" | "toggle" | "table";
 
 export interface Block {
   id: string;
@@ -295,6 +296,17 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
               </div>
             )}
           </ToggleBlock>
+        );
+        break;
+      case "table":
+        blockContent = (
+          <TableBlock
+            content={block.content}
+            metadata={block.metadata || { rows: 3, cols: 3, headerRow: true, headerCol: false }}
+            onChange={(content, metadata) => updateBlock(block.id, { content, metadata })}
+            onDelete={() => deleteBlock(block.id)}
+            isHovered={hoveredBlockId === block.id}
+          />
         );
         break;
       case "divider":
