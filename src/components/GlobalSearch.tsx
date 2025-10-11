@@ -1,68 +1,94 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, FileText, X, Loader2, Clock } from "lucide-react";
+import { Search, FileText, X, Loader2, Clock, Filter, Zap } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { usePages } from "@/hooks/usePages";
-import { supabase } from "@/integrations/supabase/client";
+import { useCombinedSearch, useSearchSuggestions, highlightSearchTerm, truncateText } from "@/hooks/useSearch";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface GlobalSearchProps {
   onPageSelect: (pageId: string) => void;
-}
-
-interface SearchResult {
-  pageId: string;
-  title: string;
-  matchType: "title" | "content";
-  preview?: string;
+  workspaceId?: string;
 }
 
 const MAX_RESULTS = 20;
 const RECENT_SEARCHES_KEY = "notion-recent-searches";
 const MAX_RECENT_SEARCHES = 5;
 
-export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
+export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [debouncedQuery] = useDebounce(query, 300);
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [isSearching, setIsSearching] = useState(false);
+  const [blockTypeFilter, setBlockTypeFilter] = useState<string>("all");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
-  
-  const { data: pages = [] } = usePages();
+
   const { toast } = useToast();
+  const { user } = useAuth();
+
+  // Use advanced search
+  const search = useCombinedSearch(
+    debouncedQuery,
+    workspaceId,
+    blockTypeFilter === "all" ? undefined : blockTypeFilter,
+    20
+  );
+
+  const suggestions = useSearchSuggestions(debouncedQuery, workspaceId, 5);
+
+  // Combine and format results
+  const combinedResults = [
+    ...search.pages.map(page => ({
+      id: page.id,
+      title: page.title,
+      type: 'page',
+      rank: page.rank,
+      content: page.title,
+    })),
+    ...search.blocks.map(block => ({
+      id: block.page_id,
+      title: block.page_title,
+      type: 'block',
+      rank: block.rank,
+      content: block.content,
+      blockType: block.type,
+    })),
+  ].sort((a, b) => b.rank - a.rank).slice(0, 20);
 
   // Load recent searches from localStorage
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem(RECENT_SEARCHES_KEY);
-      if (stored) {
-        setRecentSearches(JSON.parse(stored));
+    if (user?.id) {
+      try {
+        const stored = localStorage.getItem(`${RECENT_SEARCHES_KEY}-${user.id}`);
+        if (stored) {
+          setRecentSearches(JSON.parse(stored));
+        }
+      } catch (error) {
+        console.error("Failed to load recent searches:", error);
       }
-    } catch (error) {
-      console.error("Failed to load recent searches:", error);
     }
-  }, []);
+  }, [user?.id]);
 
   // Save recent search
   const saveRecentSearch = useCallback((searchQuery: string) => {
-    if (!searchQuery.trim()) return;
-    
+    if (!searchQuery.trim() || !user?.id) return;
+
     try {
       const updated = [
         searchQuery,
         ...recentSearches.filter(s => s !== searchQuery)
       ].slice(0, MAX_RECENT_SEARCHES);
-      
+
       setRecentSearches(updated);
-      localStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated));
+      localStorage.setItem(`${RECENT_SEARCHES_KEY}-${user.id}`, JSON.stringify(updated));
     } catch (error) {
       console.error("Failed to save recent search:", error);
     }
-  }, [recentSearches]);
+  }, [recentSearches, user?.id]);
 
   // Keyboard shortcut: Ctrl/Cmd + K
   useEffect(() => {
@@ -181,6 +207,7 @@ export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
     onPageSelect(pageId);
     setIsOpen(false);
     setQuery("");
+    setSelectedIndex(0);
   };
 
   const handleRecentSearchClick = (recentQuery: string) => {
@@ -190,13 +217,13 @@ export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setSelectedIndex(prev => Math.min(prev + 1, results.length - 1));
+      setSelectedIndex(prev => Math.min(prev + 1, combinedResults.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setSelectedIndex(prev => Math.max(prev - 1, 0));
-    } else if (e.key === "Enter" && results[selectedIndex]) {
+    } else if (e.key === "Enter" && combinedResults[selectedIndex]) {
       e.preventDefault();
-      handleSelect(results[selectedIndex].pageId);
+      handleSelect(combinedResults[selectedIndex].id);
     }
   };
 
@@ -224,14 +251,30 @@ export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
           {/* Search Input */}
           <div className="flex items-center border-b border-border px-4">
             <Search className="h-4 w-4 text-text-tertiary mr-2" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Search pages..."
-              className="border-0 focus-visible:ring-0 text-base h-12"
-              autoFocus
-            />
+            <div className="flex gap-2 flex-1">
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder="Buscar páginas e conteúdo..."
+                className="border-0 focus-visible:ring-0 text-base h-12"
+                autoFocus
+              />
+              <Select value={blockTypeFilter} onValueChange={setBlockTypeFilter}>
+                <SelectTrigger className="w-32 h-12">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Tudo</SelectItem>
+                  <SelectItem value="paragraph">Texto</SelectItem>
+                  <SelectItem value="heading1">Título 1</SelectItem>
+                  <SelectItem value="heading2">Título 2</SelectItem>
+                  <SelectItem value="code">Código</SelectItem>
+                  <SelectItem value="quote">Citação</SelectItem>
+                  <SelectItem value="table">Tabela</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <Button
               variant="ghost"
               size="sm"
@@ -256,14 +299,14 @@ export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
             )}
 
             {/* No Results */}
-            {!isSearching && results.length === 0 && query && (
+            {!search.isLoading && combinedResults.length === 0 && query && (
               <div className="py-8 text-center text-text-tertiary text-sm">
                 Nenhum resultado para "{query}"
               </div>
             )}
             
             {/* Recent Searches */}
-            {!isSearching && results.length === 0 && !query && recentSearches.length > 0 && (
+            {!search.isLoading && combinedResults.length === 0 && !query && recentSearches.length > 0 && (
               <div className="py-2">
                 <div className="text-xs font-medium text-text-tertiary px-3 mb-2">
                   Buscas recentes
@@ -282,34 +325,39 @@ export function GlobalSearch({ onPageSelect }: GlobalSearchProps) {
             )}
 
             {/* Empty State */}
-            {!isSearching && results.length === 0 && !query && recentSearches.length === 0 && (
+            {!search.isLoading && combinedResults.length === 0 && !query && recentSearches.length === 0 && (
               <div className="py-8 text-center text-text-tertiary text-sm">
                 Digite para buscar páginas...
               </div>
             )}
 
             {/* Search Results */}
-            {!isSearching && results.map((result, index) => (
+            {!search.isLoading && combinedResults.map((result, index) => (
               <div
-                key={result.pageId}
-                onClick={() => handleSelect(result.pageId)}
+                key={`${result.type}-${result.id}`}
+                onClick={() => handleSelect(result.id)}
                 className={cn(
                   "flex items-start gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors",
                   selectedIndex === index ? "bg-block-selected" : "hover:bg-hover-bg"
                 )}
               >
-                <FileText className="h-4 w-4 text-text-tertiary mt-1 flex-shrink-0" />
+                <FileText className="h-4 w-4 text-text-tertiary mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-text-primary truncate">
-                    {result.title}
-                  </div>
-                  {result.preview && (
-                    <div className="text-xs text-text-tertiary truncate mt-1">
-                      {result.preview}...
+                  <div className="font-medium text-sm">{result.title}</div>
+                  {result.type === 'block' && result.content && (
+                    <div className="text-xs text-text-tertiary mt-0.5 truncate">
+                      {truncateText(result.content, 80)}
                     </div>
                   )}
-                  <div className="text-xs text-text-tertiary mt-1">
-                    Match in {result.matchType}
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className="text-xs">
+                      {result.type === 'page' ? 'página' : 'conteúdo'}
+                    </Badge>
+                    {result.type === 'block' && result.blockType && (
+                      <Badge variant="outline" className="text-xs">
+                        {result.blockType}
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </div>
