@@ -16,6 +16,10 @@ import { usePageHierarchy } from "@/hooks/usePageHierarchy";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SaveAsTemplateButton } from "@/components/SaveAsTemplateButton";
+import { WorkspaceSelector } from "@/components/WorkspaceSelector";
+import { VersionHistory } from "@/components/VersionHistory";
+import { useCanEdit, useCanDelete } from "@/hooks/usePermissions";
+import { History } from "lucide-react";
 
 // Convert DB blocks to Editor blocks
 const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
@@ -29,17 +33,23 @@ const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
 const Index = () => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false);
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
+  const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(null);
   const [localTitle, setLocalTitle] = useState("");
   const [localBlocks, setLocalBlocks] = useState<EditorBlock[]>([]);
   const [expandedPageIds, setExpandedPageIds] = useState<Set<string>>(new Set());
   const [newPageParentId, setNewPageParentId] = useState<string | null>(null);
+  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { user } = useAuth();
   
+  // Permissions
+  const canEdit = useCanEdit(currentWorkspaceId);
+  const canDelete = useCanDelete(currentWorkspaceId);
+  
   // Fetch data from Lovable Cloud
-  const { data: pages = [], isLoading: pagesLoading } = usePages();
+  const { data: pages = [], isLoading: pagesLoading } = usePages(currentWorkspaceId);
   const { data: currentBlocks = [], isLoading: blocksLoading } = useBlocks(currentPageId);
   
   // Mutations
@@ -163,6 +173,7 @@ const Index = () => {
           title: templateTitles[template],
           position: pages.length,
           parent_id: newPageParentId,
+          workspace_id: currentWorkspaceId,
         });
 
         // Create blocks for the new page
@@ -375,12 +386,12 @@ const Index = () => {
         pages={sidebarPages}
         currentPageId={currentPageId || ""}
         onPageSelect={handlePageSelect}
-        onPageCreate={handlePageCreate}
-        onPageDelete={handlePageDelete}
-        onPageRename={handlePageRename}
-        onPageReorder={handlePageReorder}
+        onPageCreate={canEdit ? handlePageCreate : undefined}
+        onPageDelete={canDelete ? handlePageDelete : undefined}
+        onPageRename={canEdit ? handlePageRename : undefined}
+        onPageReorder={canEdit ? handlePageReorder : undefined}
         onToggleFavorite={handleToggleFavorite}
-        onUpdatePageParent={handleUpdatePageParent}
+        onUpdatePageParent={canEdit ? handleUpdatePageParent : undefined}
         expandedPageIds={expandedPageIds}
         onToggleExpand={handleToggleExpand}
         allPages={pages}
@@ -389,22 +400,39 @@ const Index = () => {
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
         <div className="h-14 border-b border-border-light bg-background flex items-center justify-between px-6">
-          <Breadcrumbs
-            currentPageId={currentPageId || ""}
-            pages={sidebarPages}
-            onPageSelect={(pageId) => handleSearchPageSelect(pageId)}
-          />
+          <div className="flex items-center gap-4">
+            <WorkspaceSelector
+              currentWorkspaceId={currentWorkspaceId || undefined}
+              onWorkspaceChange={setCurrentWorkspaceId}
+            />
+            <Breadcrumbs
+              currentPageId={currentPageId || ""}
+              pages={sidebarPages}
+              onPageSelect={(pageId) => handleSearchPageSelect(pageId)}
+            />
+          </div>
           <div className="flex items-center gap-4">
             <SaveIndicator
               status={titleAutoSave.status === "idle" ? blocksAutoSave.status : titleAutoSave.status}
               lastSaved={titleAutoSave.lastSaved || blocksAutoSave.lastSaved}
             />
-            {currentPage && (
+            {currentPage && canEdit && (
               <SaveAsTemplateButton
                 title={localTitle}
                 blocks={localBlocks}
                 disabled={localBlocks.length === 0}
               />
+            )}
+            {currentPage && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsVersionHistoryOpen(true)}
+                className="h-9 px-3"
+              >
+                <History className="h-4 w-4 mr-2" />
+                Histórico
+              </Button>
             )}
             <ThemeToggle />
             <GlobalSearch
@@ -420,6 +448,7 @@ const Index = () => {
             blocks={localBlocks}
             onTitleChange={handleTitleChange}
             onBlocksChange={handleBlocksChange}
+            readonly={!canEdit}
           />
         ) : blocksLoading ? (
           <EditorSkeleton />

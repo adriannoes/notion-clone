@@ -7,14 +7,20 @@ export type Page = Database['public']['Tables']['pages']['Row'];
 export type PageInsert = Database['public']['Tables']['pages']['Insert'];
 export type PageUpdate = Database['public']['Tables']['pages']['Update'];
 
-export function usePages() {
+export function usePages(workspaceId?: string) {
   return useQuery({
-    queryKey: ['pages'],
+    queryKey: ['pages', workspaceId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let query = supabase
         .from('pages')
         .select('*')
         .order('position');
+      
+      if (workspaceId) {
+        query = query.eq('workspace_id', workspaceId);
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       return data as Page[];
@@ -40,8 +46,9 @@ export function useCreatePage() {
       if (error) throw error;
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['pages'] });
+      queryClient.invalidateQueries({ queryKey: ['pages', data.workspace_id] });
       toast({ title: 'Página criada!' });
     },
     onError: (error) => {
