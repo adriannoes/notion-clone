@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Plus, GripVertical, Trash2, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { usePresence } from "@/hooks/usePresence";
+import { UserCursor, ActiveUsers } from "./UserCursor";
 import { RichTextEditor } from "@/components/RichTextEditor";
 import { ImageBlock } from "@/components/blocks/ImageBlock";
 import { QuoteBlock } from "@/components/blocks/QuoteBlock";
@@ -26,15 +28,50 @@ interface EditorProps {
   blocks: Block[];
   onTitleChange: (title: string) => void;
   onBlocksChange: (blocks: Block[]) => void;
+  pageId?: string;
+  workspaceId?: string;
+  readonly?: boolean;
 }
 
 // Moved to SlashMenu component
 
-export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorProps) {
+export function Editor({ 
+  title, 
+  blocks, 
+  onTitleChange, 
+  onBlocksChange, 
+  pageId, 
+  workspaceId, 
+  readonly = false 
+}: EditorProps) {
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
   const [showSlashMenu, setShowSlashMenu] = useState<{ blockId: string; position: { top: number; left: number }; search: string } | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<string | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
+
+  // Presence system
+  const { activeUsers, updateCursor, markActive } = usePresence(pageId, workspaceId);
+
+  // Handle mouse movement for cursor tracking
+  const handleMouseMove = useCallback((e: MouseEvent) => {
+    if (!readonly) {
+      updateCursor({
+        x: e.clientX,
+        y: e.clientY,
+      });
+      markActive();
+    }
+  }, [updateCursor, markActive, readonly]);
+
+  // Set up mouse tracking
+  useEffect(() => {
+    if (!readonly) {
+      document.addEventListener('mousemove', handleMouseMove);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+      };
+    }
+  }, [handleMouseMove, readonly]);
 
   useEffect(() => {
     if (titleRef.current) {
@@ -528,6 +565,11 @@ export function Editor({ title, blocks, onTitleChange, onBlocksChange }: EditorP
           />
         )}
       </div>
+
+      {/* User Cursors */}
+      {activeUsers.map((user) => (
+        <UserCursor key={user.user_id} user={user} />
+      ))}
     </div>
   );
 }

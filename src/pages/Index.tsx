@@ -19,8 +19,13 @@ import { SaveAsTemplateButton } from "@/components/SaveAsTemplateButton";
 import { WorkspaceSelector } from "@/components/WorkspaceSelector";
 import { VersionHistory } from "@/components/VersionHistory";
 import { ExportDropdown } from "@/components/ExportDropdown";
+import { NotificationCenter } from "@/components/NotificationCenter";
+import { ActiveUsers } from "@/components/UserCursor";
+import { PageProperties } from "@/components/PageProperties";
+import { DatabaseViewComponent } from "@/components/database/DatabaseView";
 import { useCanEdit, useCanDelete } from "@/hooks/usePermissions";
-import { History } from "lucide-react";
+import { usePresence } from "@/hooks/usePresence";
+import { History, Settings, X, Database } from "lucide-react";
 
 // Convert DB blocks to Editor blocks
 const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
@@ -40,6 +45,8 @@ const Index = () => {
   const [expandedPageIds, setExpandedPageIds] = useState<Set<string>>(new Set());
   const [newPageParentId, setNewPageParentId] = useState<string | null>(null);
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
+  const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'editor' | 'database'>('editor');
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -48,6 +55,9 @@ const Index = () => {
   // Permissions
   const canEdit = useCanEdit(currentWorkspaceId);
   const canDelete = useCanDelete(currentWorkspaceId);
+  
+  // Presence
+  const { activeUsers } = usePresence(currentPageId, currentWorkspaceId);
   
   // Fetch data from Lovable Cloud
   const { data: pages = [], isLoading: pagesLoading } = usePages(currentWorkspaceId);
@@ -396,6 +406,7 @@ const Index = () => {
         expandedPageIds={expandedPageIds}
         onToggleExpand={handleToggleExpand}
         allPages={pages}
+        workspaceId={currentWorkspaceId || undefined}
       />
 
       <div className="flex-1 flex flex-col">
@@ -417,6 +428,28 @@ const Index = () => {
               status={titleAutoSave.status === "idle" ? blocksAutoSave.status : titleAutoSave.status}
               lastSaved={titleAutoSave.lastSaved || blocksAutoSave.lastSaved}
             />
+            {activeUsers.length > 0 && (
+              <ActiveUsers users={activeUsers} />
+            )}
+            <div className="flex items-center border border-border rounded-md">
+              <Button
+                variant={viewMode === 'editor' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('editor')}
+                className="rounded-r-none"
+              >
+                Editor
+              </Button>
+              <Button
+                variant={viewMode === 'database' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('database')}
+                className="rounded-l-none border-l"
+              >
+                <Database className="h-4 w-4 mr-2" />
+                Banco de Dados
+              </Button>
+            </div>
             {currentPage && canEdit && (
               <SaveAsTemplateButton
                 title={localTitle}
@@ -435,6 +468,17 @@ const Index = () => {
                 Histórico
               </Button>
             )}
+            {currentPage && canEdit && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPropertiesOpen(true)}
+                className="h-9 px-3"
+              >
+                <Settings className="h-4 w-4 mr-2" />
+                Propriedades
+              </Button>
+            )}
             <ExportDropdown
               title={localTitle}
               blocks={localBlocks}
@@ -443,6 +487,7 @@ const Index = () => {
                 setLocalBlocks(blocks);
               }}
             />
+            <NotificationCenter />
             <ThemeToggle />
             <GlobalSearch
               onPageSelect={handleSearchPageSelect}
@@ -450,13 +495,25 @@ const Index = () => {
           </div>
         </div>
 
-        {/* Editor */}
-        {currentPage && !blocksLoading ? (
+        {/* Main Content */}
+        {viewMode === 'database' ? (
+          <DatabaseViewComponent
+            workspaceId={currentWorkspaceId || undefined}
+            onPageSelect={(pageId) => {
+              setCurrentPageId(pageId);
+              setViewMode('editor');
+            }}
+            onAddPage={() => handlePageCreate()}
+            className="flex-1 bg-editor-bg"
+          />
+        ) : currentPage && !blocksLoading ? (
           <Editor
             title={localTitle}
             blocks={localBlocks}
             onTitleChange={handleTitleChange}
             onBlocksChange={handleBlocksChange}
+            pageId={currentPageId || undefined}
+            workspaceId={currentWorkspaceId || undefined}
             readonly={!canEdit}
           />
         ) : blocksLoading ? (
@@ -480,6 +537,34 @@ const Index = () => {
         onClose={() => setShowTemplateSelector(false)}
         onSelect={handleTemplateSelect}
       />
+
+      {/* Properties Modal */}
+      {isPropertiesOpen && currentPage && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-background rounded-lg shadow-lg w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border-light">
+              <h2 className="text-lg font-semibold text-text-primary">
+                Propriedades da Página
+              </h2>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsPropertiesOpen(false)}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <PageProperties
+                pageId={currentPageId || undefined}
+                workspaceId={currentWorkspaceId || undefined}
+                className="h-full"
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
