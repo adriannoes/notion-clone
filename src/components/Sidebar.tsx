@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { ActivityFeed } from "./ActivityFeed";
 import {
   DndContext,
   pointerWithin,
@@ -49,6 +50,7 @@ interface SidebarProps {
   expandedPageIds: Set<string>;
   onToggleExpand: (pageId: string) => void;
   allPages: any[];
+  workspaceId?: string;
 }
 
 interface SortablePageItemProps {
@@ -495,6 +497,15 @@ export function Sidebar({
             )}
           </div>
         )}
+      </div>
+      
+      {/* Activity Feed */}
+      <div className="border-t border-border-light mt-auto">
+        <ActivityFeed 
+          workspaceId={workspaceId}
+          showHeader={true}
+          limit={5}
+        />
       </div>
     </div>
   );
