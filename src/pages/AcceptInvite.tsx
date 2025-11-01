@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { FileText, Users, Clock, CheckCircle, XCircle } from 'lucide-react';
 import { useInviteByToken, useAcceptInvite } from '@/hooks/useInvites';
 import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 export default function AcceptInvite() {
   const navigate = useNavigate();
@@ -34,7 +35,7 @@ export default function AcceptInvite() {
       const workspaceId = await acceptInviteMutation.mutateAsync(token);
       navigate(`/?workspace=${workspaceId}`);
     } catch (error) {
-      console.error('Failed to accept invite:', error);
+      logger.error('Failed to accept invite:', error);
     } finally {
       setIsAccepting(false);
     }

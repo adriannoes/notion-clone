@@ -14,6 +14,7 @@ import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type B
 import { useToast } from "@/hooks/use-toast";
 import { usePageHierarchy } from "@/hooks/usePageHierarchy";
 import { useAuth } from "@/contexts/AuthContext";
+import { logger } from "@/lib/logger";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { SaveAsTemplateButton } from "@/components/SaveAsTemplateButton";
 import { WorkspaceSelector } from "@/components/WorkspaceSelector";
@@ -134,7 +135,7 @@ const Index = () => {
           const expandedArray = JSON.parse(savedExpanded);
           setExpandedPageIds(new Set(expandedArray));
         } catch (error) {
-          console.warn('Failed to parse expanded pages from localStorage:', error);
+          logger.warn('Failed to parse expanded pages from localStorage:', error);
         }
       }
     }

@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { FileText, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 export default function ResetPassword() {
   const navigate = useNavigate();
@@ -52,7 +53,7 @@ export default function ResetPassword() {
           }
         }
       } catch (error) {
-        console.error('Error checking token:', error);
+        logger.error('Error checking token:', error);
       } finally {
         setCheckingToken(false);
       }
