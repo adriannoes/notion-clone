@@ -1,0 +1,6 @@
+# Supabase Local Development Configuration
+# Copie este arquivo para config.toml e preencha com suas credenciais
+# O arquivo config.toml está no .gitignore e não será commitado
+
+project_id = "[seu-project-id-aqui]"
+
