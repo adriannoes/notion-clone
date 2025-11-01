@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { uploadImage, deleteImage, isStorageUrl, dataUrlToFile } from "@/lib/storage";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/lib/logger";
 
 interface ImageBlockProps {
   content: string;
@@ -31,7 +32,7 @@ export function ImageBlock({ content, onChange, onDelete, isHovered }: ImageBloc
           description: "A imagem foi salva com sucesso.",
         });
       } catch (error) {
-        console.error('Upload failed:', error);
+        logger.error('Upload failed:', error);
         toast({
           variant: "destructive",
           title: "Erro ao carregar imagem",
@@ -65,7 +66,7 @@ export function ImageBlock({ content, onChange, onDelete, isHovered }: ImageBloc
       try {
         await deleteImage(content);
       } catch (error) {
-        console.warn('Failed to delete image from storage:', error);
+        logger.warn('Failed to delete image from storage:', error);
       }
     }
     onDelete();

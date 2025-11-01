@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { logger } from "@/lib/logger";
 import { cn } from "@/lib/utils";
 import { useMarkNotificationRead, useDeleteNotification } from "@/hooks/useNotifications";
 import type { Notification } from "@/hooks/useNotifications";
@@ -92,7 +93,7 @@ export function NotificationItem({
     // Navigate to page if metadata contains page_id
     if (notification.metadata && typeof notification.metadata === 'object' && 'page_id' in notification.metadata) {
       // This would be handled by the parent component
-      console.log('Navigate to page:', notification.metadata.page_id);
+      logger.log('Navigate to page:', notification.metadata.page_id);
     }
   };
 

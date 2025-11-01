@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/lib/logger';
 
 export interface UserPresence {
   user_id: string;
@@ -103,7 +104,7 @@ export function usePresence(pageId?: string, workspaceId?: string) {
           filter: `page_id=eq.${pageId}`,
         },
         (payload) => {
-          console.log('Presence update:', payload);
+          logger.log('Presence update:', payload);
           queryClient.invalidateQueries({ queryKey: ['presence', pageId] });
         }
       )

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Code, Copy, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { logger } from "@/lib/logger";
 
 interface CodeBlockProps {
   content: string;
@@ -19,7 +20,7 @@ export function CodeBlock({ content, onChange, onKeyDown, isHovered }: CodeBlock
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      console.error('Failed to copy text: ', err);
+      logger.error('Failed to copy text: ', err);
     }
   };
 

@@ -1,4 +1,5 @@
 import { supabase } from '@/integrations/supabase/client';
+import { logger } from './logger';
 
 /**
  * Uploads an image file to Supabase Storage
@@ -53,7 +54,7 @@ export async function deleteImage(
     .remove([fileName]);
 
   if (error) {
-    console.warn(`Failed to delete image: ${error.message}`);
+    logger.warn(`Failed to delete image: ${error.message}`);
   }
 }
 

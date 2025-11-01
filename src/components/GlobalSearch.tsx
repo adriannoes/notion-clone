@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { useCombinedSearch, useSearchSuggestions, highlightSearchTerm, truncateText } from "@/hooks/useSearch";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { logger } from "@/lib/logger";
 
 interface GlobalSearchProps {
   onPageSelect: (pageId: string) => void;
@@ -68,7 +69,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
           setRecentSearches(JSON.parse(stored));
         }
       } catch (error) {
-        console.error("Failed to load recent searches:", error);
+        logger.error("Failed to load recent searches:", error);
       }
     }
   }, [user?.id]);
@@ -86,7 +87,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
       setRecentSearches(updated);
       localStorage.setItem(`${RECENT_SEARCHES_KEY}-${user.id}`, JSON.stringify(updated));
     } catch (error) {
-      console.error("Failed to save recent search:", error);
+      logger.error("Failed to save recent search:", error);
     }
   }, [recentSearches, user?.id]);
 
@@ -146,7 +147,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
           .limit(remainingSlots);
 
         if (error) {
-          console.error("Search error:", error);
+          logger.error("Search error:", error);
           toast({
             title: "Erro na busca",
             description: "Não foi possível buscar no conteúdo das páginas.",
@@ -181,7 +182,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
       setResults(searchResults);
       setSelectedIndex(0);
     } catch (error) {
-      console.error("Search error:", error);
+      logger.error("Search error:", error);
       toast({
         title: "Erro na busca",
         description: "Ocorreu um erro ao realizar a busca.",

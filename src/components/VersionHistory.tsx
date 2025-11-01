@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { usePageVersions, useRestoreVersion, useDeleteVersion, formatVersionDate } from "@/hooks/useVersions";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/lib/logger";
 
 interface VersionHistoryProps {
   isOpen: boolean;
@@ -34,7 +35,7 @@ export function VersionHistory({ isOpen, onClose, pageId, pageTitle }: VersionHi
       await restoreVersionMutation.mutateAsync(versionId);
       onClose();
     } catch (error) {
-      console.error('Failed to restore version:', error);
+      logger.error('Failed to restore version:', error);
     } finally {
       setIsRestoring(false);
     }

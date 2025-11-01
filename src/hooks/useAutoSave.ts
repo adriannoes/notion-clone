@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useDebouncedCallback } from "use-debounce";
+import { logger } from "@/lib/logger";
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
@@ -40,7 +41,7 @@ export function useAutoSave({ onSave, delay = 800 }: UseAutoSaveOptions) {
           }, 2000);
         }
       } catch (error) {
-        console.error("Auto-save error:", error);
+        logger.error("Auto-save error:", error);
         if (isMountedRef.current) {
           setStatus("error");
         }

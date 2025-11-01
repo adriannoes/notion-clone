@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { useWorkspaceInvites, useCreateInvite, useDeleteInvite } from "@/hooks/useInvites";
 import { useToast } from "@/hooks/use-toast";
+import { logger } from "@/lib/logger";
 
 interface ShareWorkspaceModalProps {
   isOpen: boolean;
@@ -50,7 +51,7 @@ export function ShareWorkspaceModal({ isOpen, onClose, workspaceId, workspaceNam
       setEmail("");
       setRole("editor");
     } catch (error) {
-      console.error('Failed to create invite:', error);
+      logger.error('Failed to create invite:', error);
     } finally {
       setIsCreating(false);
     }

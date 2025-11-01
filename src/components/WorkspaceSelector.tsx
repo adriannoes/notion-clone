@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { UserRoleBadge } from "@/components/UserRoleBadge";
 import { ShareWorkspaceModal } from "@/components/ShareWorkspaceModal";
 import { useCanInvite } from "@/hooks/usePermissions";
+import { logger } from "@/lib/logger";
 
 interface WorkspaceSelectorProps {
   currentWorkspaceId?: string;
@@ -49,7 +50,7 @@ export function WorkspaceSelector({ currentWorkspaceId, onWorkspaceChange }: Wor
       setWorkspaceName("");
       setWorkspaceDescription("");
     } catch (error) {
-      console.error('Failed to create workspace:', error);
+      logger.error('Failed to create workspace:', error);
     } finally {
       setIsCreating(false);
     }

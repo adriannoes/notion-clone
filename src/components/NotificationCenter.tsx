@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
+import { logger } from "@/lib/logger";
 import { 
   useNotifications, 
   useUnreadNotificationsCount,
@@ -148,7 +149,7 @@ export function NotificationCenter() {
                 className="w-full justify-start text-xs text-text-secondary hover:text-text-primary"
                 onClick={() => {
                   // Navigate to full notifications page
-                  console.log('Navigate to notifications page');
+                  logger.log('Navigate to notifications page');
                 }}
               >
                 Ver todas as notificações
