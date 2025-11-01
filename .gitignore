@@ -56,3 +56,6 @@ coverage
 *.tmp
 *.temp
 .cache
+
+# Security and internal documentation
+SECURITY_REVIEW.md
