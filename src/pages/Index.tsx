@@ -8,6 +8,7 @@ import { TemplateSelector, type TemplateType } from "@/components/TemplateSelect
 import { SaveIndicator } from "@/components/SaveIndicator";
 import { SidebarSkeleton } from "@/components/SidebarSkeleton";
 import { EditorSkeleton } from "@/components/EditorSkeleton";
+import { FileText } from "lucide-react";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages, useUpdatePageParent } from "@/hooks/usePages";
 import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type Block as DBBlock } from "@/hooks/useBlocks";
@@ -16,6 +17,7 @@ import { usePageHierarchy } from "@/hooks/usePageHierarchy";
 import { useAuth } from "@/contexts/AuthContext";
 import { logger } from "@/lib/logger";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { cn } from "@/lib/utils";
 import { SaveAsTemplateButton } from "@/components/SaveAsTemplateButton";
 import { WorkspaceSelector } from "@/components/WorkspaceSelector";
 import { VersionHistory } from "@/components/VersionHistory";
@@ -26,7 +28,8 @@ import { PageProperties } from "@/components/PageProperties";
 import { DatabaseViewComponent } from "@/components/database/DatabaseView";
 import { useCanEdit, useCanDelete } from "@/hooks/usePermissions";
 import { usePresence } from "@/hooks/usePresence";
-import { History, Settings, X, Database } from "lucide-react";
+import { History, Settings, X, Database, Menu } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 // Convert DB blocks to Editor blocks
 const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
@@ -48,6 +51,8 @@ const Index = () => {
   const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
   const [isPropertiesOpen, setIsPropertiesOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'editor' | 'database'>('editor');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const isMobile = useIsMobile();
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -394,7 +399,21 @@ const Index = () => {
 
   return (
     <div className="flex min-h-screen bg-background font-inter">
-      <Sidebar
+      {/* Mobile Sidebar Overlay */}
+      {isMobile && sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+      
+      <div className={cn(
+        isMobile ? 'fixed' : 'relative',
+        isMobile && !sidebarOpen ? '-translate-x-full' : 'translate-x-0',
+        'z-50 transition-transform duration-300',
+        isMobile ? 'w-80' : 'w-64'
+      )}>
+        <Sidebar
         pages={sidebarPages}
         currentPageId={currentPageId || ""}
         onPageSelect={handlePageSelect}
@@ -412,8 +431,18 @@ const Index = () => {
 
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
-        <div className="h-14 border-b border-border-light bg-background flex items-center justify-between px-6">
-          <div className="flex items-center gap-4">
+        <div className="h-14 border-b border-border-light bg-background flex items-center justify-between px-4 md:px-6">
+          <div className="flex items-center gap-2 md:gap-4">
+            {isMobile && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="h-9 w-9 p-0"
+              >
+                <Menu className="h-4 w-4" />
+              </Button>
+            )}
             <WorkspaceSelector
               currentWorkspaceId={currentWorkspaceId || undefined}
               onWorkspaceChange={setCurrentWorkspaceId}
@@ -424,7 +453,7 @@ const Index = () => {
               onPageSelect={(pageId) => handleSearchPageSelect(pageId)}
             />
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 md:gap-4 flex-wrap">
             <SaveIndicator
               status={titleAutoSave.status === "idle" ? blocksAutoSave.status : titleAutoSave.status}
               lastSaved={titleAutoSave.lastSaved || blocksAutoSave.lastSaved}
@@ -497,6 +526,7 @@ const Index = () => {
         </div>
 
         {/* Main Content */}
+        <div className="flex-1 overflow-auto">
         {viewMode === 'database' ? (
           <DatabaseViewComponent
             workspaceId={currentWorkspaceId || undefined}
@@ -528,6 +558,48 @@ const Index = () => {
               <p className="text-text-secondary">
                 Selecione uma página na barra lateral para começar a editar
               </p>
+            </div>
+          </div>
+        )}
+        </div>
+        
+        {/* Mobile Bottom Navigation */}
+        {isMobile && (
+          <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50 md:hidden">
+            <div className="flex items-center justify-around h-14">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(true)}
+                className="flex flex-col items-center gap-1 h-full"
+              >
+                <Menu className="h-4 w-4" />
+                <span className="text-xs">Páginas</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewMode('editor')}
+                className={cn(
+                  "flex flex-col items-center gap-1 h-full",
+                  viewMode === 'editor' && "text-primary"
+                )}
+              >
+                <FileText className="h-4 w-4" />
+                <span className="text-xs">Editor</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setViewMode('database')}
+                className={cn(
+                  "flex flex-col items-center gap-1 h-full",
+                  viewMode === 'database' && "text-primary"
+                )}
+              >
+                <Database className="h-4 w-4" />
+                <span className="text-xs">Dados</span>
+              </Button>
             </div>
           </div>
         )}
