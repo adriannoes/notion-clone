@@ -5,6 +5,8 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 import { TableView } from "./TableView";
+import { KanbanView } from "./KanbanView";
+import { CalendarView } from "./CalendarView";
 import { useDatabaseViews, usePagesWithProperties, useWorkspacePropertySchema } from "@/hooks/useDatabaseViews";
 import type { DatabaseView } from "@/hooks/useDatabaseViews";
 
@@ -119,27 +121,23 @@ export function DatabaseViewComponent({
         )}
         
         {currentView?.view_type === 'kanban' && (
-          <div className="p-8 text-center">
-            <Kanban className="h-12 w-12 mx-auto text-text-placeholder mb-4" />
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
-              Visualização Kanban
-            </h3>
-            <p className="text-text-secondary">
-              Em desenvolvimento - será implementada em breve
-            </p>
-          </div>
+          <KanbanView
+            pages={pages}
+            propertySchema={propertySchema}
+            onPageSelect={onPageSelect}
+            onAddPage={onAddPage}
+            className="p-4"
+          />
         )}
         
         {currentView?.view_type === 'calendar' && (
-          <div className="p-8 text-center">
-            <Calendar className="h-12 w-12 mx-auto text-text-placeholder mb-4" />
-            <h3 className="text-lg font-semibold text-text-primary mb-2">
-              Visualização Calendário
-            </h3>
-            <p className="text-text-secondary">
-              Em desenvolvimento - será implementada em breve
-            </p>
-          </div>
+          <CalendarView
+            pages={pages}
+            propertySchema={propertySchema}
+            onPageSelect={onPageSelect}
+            onAddPage={onAddPage}
+            className="p-4"
+          />
         )}
       </div>
     </div>
