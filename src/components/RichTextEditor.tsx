@@ -2,6 +2,7 @@ import { useRef, useEffect, useState, useCallback } from "react";
 import { Bold, Italic, Underline, Code, Link, Type } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { MentionMenu } from "./MentionMenu";
 
 interface RichTextEditorProps {
   content: string;
@@ -10,6 +11,8 @@ interface RichTextEditorProps {
   className?: string;
   onKeyDown?: (e: React.KeyboardEvent) => void;
   autoFocus?: boolean;
+  workspaceId?: string;
+  onMention?: (userId: string, userName: string) => void;
 }
 
 interface FormatState {
@@ -25,7 +28,9 @@ export function RichTextEditor({
   placeholder = "Start typing...",
   className = "",
   onKeyDown,
-  autoFocus = false
+  autoFocus = false,
+  workspaceId,
+  onMention
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement>(null);
   const [formatState, setFormatState] = useState<FormatState>({
@@ -36,6 +41,7 @@ export function RichTextEditor({
   });
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
+  const [showMentionMenu, setShowMentionMenu] = useState<{ position: { top: number; left: number }; search: string } | null>(null);
 
   useEffect(() => {
     if (editorRef.current && autoFocus) {
@@ -68,14 +74,60 @@ export function RichTextEditor({
     }
   }, [updateFormatState]);
 
+  const detectMention = useCallback(() => {
+    const selection = window.getSelection();
+    if (!selection || selection.rangeCount === 0) return;
+
+    const range = selection.getRangeAt(0);
+    const textNode = range.startContainer;
+    
+    if (textNode.nodeType === Node.TEXT_NODE) {
+      const text = textNode.textContent || '';
+      const cursorPosition = range.startOffset;
+      const textBeforeCursor = text.substring(0, cursorPosition);
+      
+      // Check for @mention pattern
+      const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+      
+      if (mentionMatch && workspaceId && onMention) {
+        const search = mentionMatch[1];
+        const rect = range.getBoundingClientRect();
+        setShowMentionMenu({
+          position: {
+            top: rect.bottom + 5,
+            left: rect.left
+          },
+          search
+        });
+      } else {
+        setShowMentionMenu(null);
+      }
+    } else {
+      setShowMentionMenu(null);
+    }
+  }, [workspaceId, onMention]);
+
   const handleInput = useCallback(() => {
     if (editorRef.current) {
       const newContent = editorRef.current.innerHTML;
       onChange(newContent);
+      
+      // Detect mentions after content change
+      setTimeout(() => detectMention(), 0);
     }
-  }, [onChange]);
+  }, [onChange, detectMention]);
 
   const handleKeyDownInternal = useCallback((e: React.KeyboardEvent) => {
+    // Handle mention menu navigation
+    if (showMentionMenu) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionMenu(null);
+        return;
+      }
+      // Let MentionMenu handle Arrow keys and Enter
+    }
+    
     // Rich text shortcuts
     if (e.ctrlKey || e.metaKey) {
       switch (e.key) {
@@ -98,7 +150,7 @@ export function RichTextEditor({
     }
     
     onKeyDown?.(e);
-  }, [onKeyDown, updateFormatState]);
+  }, [onKeyDown, updateFormatState, showMentionMenu]);
 
   const applyFormat = (command: string) => {
     document.execCommand(command);
@@ -212,6 +264,56 @@ export function RichTextEditor({
             <Link className="h-4 w-4" />
           </Button>
         </div>
+      )}
+
+      {/* Mention Menu */}
+      {showMentionMenu && workspaceId && onMention && (
+        <MentionMenu
+          position={showMentionMenu.position}
+          search={showMentionMenu.search}
+          workspaceId={workspaceId}
+          onSelect={(userId, userName) => {
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+              const range = selection.getRangeAt(0);
+              const textNode = range.startContainer;
+              
+              if (textNode.nodeType === Node.TEXT_NODE) {
+                const text = textNode.textContent || '';
+                const cursorPosition = range.startOffset;
+                const textBeforeCursor = text.substring(0, cursorPosition);
+                const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
+                
+                if (mentionMatch) {
+                  const startPos = cursorPosition - mentionMatch[0].length;
+                  const endPos = cursorPosition;
+                  
+                  range.setStart(textNode, startPos);
+                  range.setEnd(textNode, endPos);
+                  range.deleteContents();
+                  
+                  const mentionSpan = document.createElement('span');
+                  mentionSpan.className = 'bg-primary/10 text-primary px-1 rounded';
+                  mentionSpan.setAttribute('data-mention-id', userId);
+                  mentionSpan.setAttribute('data-mention-name', userName);
+                  mentionSpan.textContent = `@${userName}`;
+                  range.insertNode(mentionSpan);
+                  
+                  // Move cursor after mention
+                  range.setStartAfter(mentionSpan);
+                  range.collapse(true);
+                  selection.removeAllRanges();
+                  selection.addRange(range);
+                }
+              }
+            }
+            
+            onMention(userId, userName);
+            setShowMentionMenu(null);
+            editorRef.current?.focus();
+          }}
+          onClose={() => setShowMentionMenu(null)}
+        />
       )}
     </div>
   );
