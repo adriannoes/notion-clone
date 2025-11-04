@@ -26,6 +26,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
   const [debouncedQuery] = useDebounce(query, 300);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [blockTypeFilter, setBlockTypeFilter] = useState<string>("all");
+  const [dateFilter, setDateFilter] = useState<string>("all");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   const { toast } = useToast();
@@ -273,6 +274,18 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
                   <SelectItem value="code">Código</SelectItem>
                   <SelectItem value="quote">Citação</SelectItem>
                   <SelectItem value="table">Tabela</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={dateFilter} onValueChange={setDateFilter}>
+                <SelectTrigger className="w-36 h-12">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Qualquer data</SelectItem>
+                  <SelectItem value="today">Hoje</SelectItem>
+                  <SelectItem value="week">Esta semana</SelectItem>
+                  <SelectItem value="month">Este mês</SelectItem>
+                  <SelectItem value="year">Este ano</SelectItem>
                 </SelectContent>
               </Select>
             </div>
