@@ -47,6 +47,7 @@ export function Editor({
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
   const [showSlashMenu, setShowSlashMenu] = useState<{ blockId: string; position: { top: number; left: number }; search: string } | null>(null);
   const [draggedBlock, setDraggedBlock] = useState<string | null>(null);
+  const [commentBlockId, setCommentBlockId] = useState<string | null>(null);
   const titleRef = useRef<HTMLTextAreaElement>(null);
 
   // Presence system
@@ -221,6 +222,19 @@ export function Editor({
       content: block.content,
       onChange: (content: string) => updateBlock(block.id, { content }),
       onKeyDown: (e: React.KeyboardEvent) => handleKeyDown(e, block.id, index),
+      workspaceId,
+      onMention: (userId: string, userName: string) => {
+        // Save mention in block metadata
+        const currentMentions = block.metadata?.mentions || [];
+        if (!currentMentions.find((m: any) => m.userId === userId)) {
+          updateBlock(block.id, {
+            metadata: {
+              ...block.metadata,
+              mentions: [...currentMentions, { userId, userName, timestamp: new Date().toISOString() }]
+            }
+          });
+        }
+      },
     };
 
     let blockContent;
@@ -409,6 +423,25 @@ export function Editor({
             >
               <Plus className="h-3 w-3" />
             </Button>
+            {!readonly && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={cn(
+                  "h-6 w-6 p-0 hover:bg-hover-bg",
+                  commentBlockId === block.id && "bg-primary/10 text-primary"
+                )}
+                onClick={() => setCommentBlockId(commentBlockId === block.id ? null : block.id)}
+              >
+                <MessageSquare className="h-3 w-3" />
+              </Button>
+            )}
+          </div>
+        )}
+        
+        {commentBlockId === block.id && pageId && !readonly && (
+          <div className="mt-4 ml-12 border-l-2 border-primary pl-4">
+            <CommentThread blockId={block.id} pageId={pageId} />
           </div>
         )}
       </div>
@@ -535,6 +568,11 @@ export function Editor({
             placeholder="Untitled"
             className="text-5xl font-bold text-text-primary leading-tight"
             autoFocus
+            workspaceId={workspaceId}
+            onMention={(userId, userName) => {
+              // Mentions in title could be saved to page metadata if needed
+              console.log('Mention in title:', userId, userName);
+            }}
           />
         </div>
         
