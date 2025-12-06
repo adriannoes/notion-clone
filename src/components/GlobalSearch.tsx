@@ -1,13 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
-import { Search, FileText, X, Loader2, Clock, Filter, Zap } from "lucide-react";
+import { Search, FileText, X, Loader2, Clock } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { useCombinedSearch, useSearchSuggestions, highlightSearchTerm, truncateText } from "@/hooks/useSearch";
-import { useToast } from "@/hooks/use-toast";
+import { useCombinedSearch, useSearchSuggestions, truncateText } from "@/hooks/useSearch";
 import { useAuth } from "@/contexts/AuthContext";
 import { logger } from "@/lib/logger";
 
@@ -16,7 +15,6 @@ interface GlobalSearchProps {
   workspaceId?: string;
 }
 
-const MAX_RESULTS = 20;
 const RECENT_SEARCHES_KEY = "notion-recent-searches";
 const MAX_RECENT_SEARCHES = 5;
 
@@ -29,7 +27,6 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
-  const { toast } = useToast();
   const { user } = useAuth();
 
   // Use advanced search
@@ -40,21 +37,19 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
     20
   );
 
-  const suggestions = useSearchSuggestions(debouncedQuery, workspaceId, 5);
-
   // Combine and format results
   const combinedResults = [
     ...search.pages.map(page => ({
       id: page.id,
       title: page.title,
-      type: 'page',
+      type: 'page' as const,
       rank: page.rank,
       content: page.title,
     })),
     ...search.blocks.map(block => ({
       id: block.page_id,
       title: block.page_title,
-      type: 'block',
+      type: 'block' as const,
       rank: block.rank,
       content: block.content,
       blockType: block.type,
@@ -108,101 +103,6 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
-
-  // Async search logic with database queries
-  const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const lowerQuery = searchQuery.toLowerCase();
-    const searchResults: SearchResult[] = [];
-
-    try {
-      // First, search in page titles (fast, in-memory)
-      const titleMatches = pages.filter(page =>
-        page.title.toLowerCase().includes(lowerQuery)
-      );
-
-      titleMatches.forEach(page => {
-        if (searchResults.length >= MAX_RESULTS) return;
-        searchResults.push({
-          pageId: page.id,
-          title: page.title,
-          matchType: "title"
-        });
-      });
-
-      // If we haven't reached the limit, search in content
-      if (searchResults.length < MAX_RESULTS) {
-        const remainingSlots = MAX_RESULTS - searchResults.length;
-        
-        // Search in blocks content (requires DB query)
-        const { data: blockMatches, error } = await supabase
-          .from("blocks")
-          .select("page_id, content")
-          .ilike("content", `%${searchQuery}%`)
-          .limit(remainingSlots);
-
-        if (error) {
-          logger.error("Search error:", error);
-          toast({
-            title: "Erro na busca",
-            description: "Não foi possível buscar no conteúdo das páginas.",
-            variant: "destructive",
-          });
-        } else if (blockMatches) {
-          // Get unique page IDs from block matches
-          const matchedPageIds = new Set(blockMatches.map(b => b.page_id));
-          
-          matchedPageIds.forEach(pageId => {
-            if (searchResults.length >= MAX_RESULTS) return;
-            
-            // Skip if already in results (title match)
-            if (searchResults.some(r => r.pageId === pageId)) return;
-            
-            const page = pages.find(p => p.id === pageId);
-            if (!page) return;
-
-            const blockMatch = blockMatches.find(b => b.page_id === pageId);
-            const preview = blockMatch?.content?.substring(0, 100) || "";
-
-            searchResults.push({
-              pageId: page.id,
-              title: page.title,
-              matchType: "content",
-              preview
-            });
-          });
-        }
-      }
-
-      setResults(searchResults);
-      setSelectedIndex(0);
-    } catch (error) {
-      logger.error("Search error:", error);
-      toast({
-        title: "Erro na busca",
-        description: "Ocorreu um erro ao realizar a busca.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  }, [pages, toast]);
-
-  // Debounced search effect
-  useEffect(() => {
-    if (debouncedQuery) {
-      performSearch(debouncedQuery);
-    } else {
-      setResults([]);
-      setIsSearching(false);
-    }
-  }, [debouncedQuery, performSearch]);
 
   const handleSelect = (pageId: string) => {
     saveRecentSearch(query);
@@ -305,7 +205,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
           {/* Results */}
           <div className="max-h-[400px] overflow-y-auto p-2">
             {/* Loading State */}
-            {isSearching && (
+            {search.isLoading && (
               <div className="flex items-center justify-center py-8 gap-2 text-text-tertiary">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Buscando...</span>

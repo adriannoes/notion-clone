@@ -414,20 +414,21 @@ const Index = () => {
         isMobile ? 'w-80' : 'w-64'
       )}>
         <Sidebar
-        pages={sidebarPages}
-        currentPageId={currentPageId || ""}
-        onPageSelect={handlePageSelect}
-        onPageCreate={canEdit ? handlePageCreate : undefined}
-        onPageDelete={canDelete ? handlePageDelete : undefined}
-        onPageRename={canEdit ? handlePageRename : undefined}
-        onPageReorder={canEdit ? handlePageReorder : undefined}
-        onToggleFavorite={handleToggleFavorite}
-        onUpdatePageParent={canEdit ? handleUpdatePageParent : undefined}
-        expandedPageIds={expandedPageIds}
-        onToggleExpand={handleToggleExpand}
-        allPages={pages}
-        workspaceId={currentWorkspaceId || undefined}
-      />
+          pages={sidebarPages}
+          currentPageId={currentPageId || ""}
+          onPageSelect={handlePageSelect}
+          onPageCreate={canEdit ? handlePageCreate : undefined}
+          onPageDelete={canDelete ? handlePageDelete : undefined}
+          onPageRename={canEdit ? handlePageRename : undefined}
+          onPageReorder={canEdit ? handlePageReorder : undefined}
+          onToggleFavorite={handleToggleFavorite}
+          onUpdatePageParent={canEdit ? handleUpdatePageParent : undefined}
+          expandedPageIds={expandedPageIds}
+          onToggleExpand={handleToggleExpand}
+          allPages={pages}
+          workspaceId={currentWorkspaceId || undefined}
+        />
+      </div>
 
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
