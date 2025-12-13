@@ -48,19 +48,18 @@ export function MentionMenu({
           // Fallback: get all profiles (limited to current user's workspace or public)
           const { data: profiles, error } = await supabase
             .from('profiles')
-            .select('id, full_name, email')
+            .select('id, full_name')
             .limit(20);
 
           if (!error && profiles) {
             filteredUsers = profiles
               .map(profile => ({
                 id: profile.id,
-                name: profile.full_name || profile.email || 'Usuário sem nome',
-                email: profile.email || '',
+                name: profile.full_name || 'Usuário sem nome',
+                email: '',
               }))
               .filter(user =>
-                user.name.toLowerCase().includes(search.toLowerCase()) ||
-                user.email.toLowerCase().includes(search.toLowerCase())
+                user.name.toLowerCase().includes(search.toLowerCase())
               );
           }
         }

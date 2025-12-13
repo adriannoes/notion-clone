@@ -243,6 +243,7 @@ export function Sidebar({
   expandedPageIds,
   onToggleExpand,
   allPages,
+  workspaceId,
 }: SidebarProps) {
   const [editingPageId, setEditingPageId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");

@@ -1,26 +1,44 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Database } from '@/integrations/supabase/types';
 
-export type Page = Database['public']['Tables']['pages']['Row'];
-export type PageInsert = Database['public']['Tables']['pages']['Insert'];
-export type PageUpdate = Database['public']['Tables']['pages']['Update'];
+// Define types locally since the DB schema may not have workspace_id
+export interface Page {
+  id: string;
+  title: string;
+  icon: string;
+  parent_id: string | null;
+  position: number;
+  is_favorite: boolean;
+  user_id: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PageInsert {
+  title: string;
+  icon?: string;
+  parent_id?: string | null;
+  position?: number;
+  is_favorite?: boolean;
+}
+
+export interface PageUpdate {
+  title?: string;
+  icon?: string;
+  parent_id?: string | null;
+  position?: number;
+  is_favorite?: boolean;
+}
 
 export function usePages(workspaceId?: string) {
   return useQuery({
     queryKey: ['pages', workspaceId],
     queryFn: async () => {
-      let query = supabase
+      const { data, error } = await supabase
         .from('pages')
         .select('*')
         .order('position');
-      
-      if (workspaceId) {
-        query = query.eq('workspace_id', workspaceId);
-      }
-      
-      const { data, error } = await query;
       
       if (error) throw error;
       return data as Page[];
@@ -33,7 +51,7 @@ export function useCreatePage() {
   const { toast } = useToast();
 
   return useMutation({
-    mutationFn: async (page: Omit<PageInsert, 'user_id'>) => {
+    mutationFn: async (page: PageInsert) => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
@@ -46,9 +64,8 @@ export function useCreatePage() {
       if (error) throw error;
       return data;
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['pages'] });
-      queryClient.invalidateQueries({ queryKey: ['pages', data.workspace_id] });
       toast({ title: 'Página criada!' });
     },
     onError: (error) => {

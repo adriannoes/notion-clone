@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Stub types - activities table not yet created
 export interface Activity {
   id: string;
   user_id: string;
@@ -25,70 +25,42 @@ export interface CreateActivityParams {
   metadata?: Record<string, any>;
 }
 
+// Stub hook - activities table not yet created
 export function useActivities(workspaceId?: string) {
   return useQuery({
     queryKey: ['activities', workspaceId],
     queryFn: async () => {
-      if (!workspaceId) return [];
-      
-      const { data, error } = await supabase.rpc('get_workspace_activities', {
-        p_workspace_id: workspaceId,
-        p_limit: 50
-      });
-      
-      if (error) throw error;
-      return data as Activity[];
+      // Activities table not yet implemented
+      console.warn('Activities feature requires database migration');
+      return [] as Activity[];
     },
-    enabled: !!workspaceId,
+    enabled: false, // Disabled until table is created
   });
 }
 
+// Stub hook - activities table not yet created
 export function useCreateActivity() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (params: CreateActivityParams) => {
-      const { data, error } = await supabase.rpc('create_activity', {
-        p_user_id: params.userId,
-        p_workspace_id: params.workspaceId,
-        p_action: params.action,
-        p_entity_type: params.entityType,
-        p_entity_id: params.entityId,
-        p_entity_name: params.entityName || null,
-        p_metadata: params.metadata || {}
-      });
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['activities', variables.workspaceId] });
-    },
-    onError: (error) => {
-      toast({
-        variant: 'destructive',
-        title: 'Erro ao criar atividade',
-        description: error.message,
-      });
+      console.warn('Activities feature requires database migration');
+      // Silently fail - activities are optional
+      return null;
     },
   });
 }
 
+// Stub hook - activities table not yet created
 export function useRecentActivities(workspaceId?: string, limit: number = 10) {
   return useQuery({
     queryKey: ['activities', workspaceId, 'recent', limit],
     queryFn: async () => {
-      if (!workspaceId) return [];
-      
-      const { data, error } = await supabase.rpc('get_workspace_activities', {
-        p_workspace_id: workspaceId,
-        p_limit: limit
-      });
-      
-      if (error) throw error;
-      return data as Activity[];
+      // Activities table not yet implemented
+      console.warn('Activities feature requires database migration');
+      return [] as Activity[];
     },
-    enabled: !!workspaceId,
+    enabled: false, // Disabled until table is created
   });
 }

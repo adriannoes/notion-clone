@@ -1,7 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
+// Stub types - database_views table not yet created
 export interface DatabaseView {
   id: string;
   workspace_id: string;
@@ -36,94 +36,63 @@ export interface CreateViewParams {
   configuration?: Record<string, any>;
 }
 
+// Stub hook - database_views table not yet created
 export function useDatabaseViews(workspaceId?: string) {
   return useQuery({
     queryKey: ['database-views', workspaceId],
     queryFn: async () => {
-      if (!workspaceId) return [];
-      
-      const { data, error } = await supabase
-        .from('database_views')
-        .select('*')
-        .eq('workspace_id', workspaceId)
-        .order('created_at');
-      
-      if (error) throw error;
-      return data as DatabaseView[];
+      console.warn('Database views feature requires database migration');
+      return [] as DatabaseView[];
     },
-    enabled: !!workspaceId,
+    enabled: false, // Disabled until table is created
   });
 }
 
+// Stub hook - RPC function not yet created
 export function usePagesWithProperties(workspaceId?: string, propertyNames?: string[]) {
   return useQuery({
     queryKey: ['pages-with-properties', workspaceId, propertyNames],
     queryFn: async () => {
-      if (!workspaceId) return [];
-      
-      const { data, error } = await supabase.rpc('get_pages_with_properties', {
-        p_workspace_id: workspaceId,
-        p_property_names: propertyNames || null
-      });
-      
-      if (error) throw error;
-      return data as PageWithProperties[];
+      console.warn('Pages with properties feature requires database migration');
+      return [] as PageWithProperties[];
     },
-    enabled: !!workspaceId,
+    enabled: false, // Disabled until RPC is created
   });
 }
 
+// Stub hook - RPC function not yet created
 export function useWorkspacePropertySchema(workspaceId?: string) {
   return useQuery({
     queryKey: ['workspace-property-schema', workspaceId],
     queryFn: async () => {
-      if (!workspaceId) return [];
-      
-      const { data, error } = await supabase.rpc('get_workspace_property_schema', {
-        p_workspace_id: workspaceId
-      });
-      
-      if (error) throw error;
-      return data as PropertySchema[];
+      console.warn('Workspace property schema feature requires database migration');
+      return [] as PropertySchema[];
     },
-    enabled: !!workspaceId,
+    enabled: false, // Disabled until RPC is created
   });
 }
 
+// Stub hook - database_views table not yet created
 export function useCreateDatabaseView() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (params: CreateViewParams) => {
-      const { data, error } = await supabase
-        .from('database_views')
-        .insert({
-          workspace_id: params.workspaceId,
-          name: params.name,
-          view_type: params.viewType,
-          configuration: params.configuration || {}
-        })
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['database-views', data.workspace_id] });
-      toast({ title: 'Visualização criada' });
+      console.warn('Database views feature requires database migration');
+      throw new Error('Database views feature not yet implemented');
     },
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Erro ao criar visualização',
-        description: error.message,
+        title: 'Visualizações não disponíveis',
+        description: 'Esta funcionalidade será implementada em breve.',
       });
     },
   });
 }
 
+// Stub hook - database_views table not yet created
 export function useUpdateDatabaseView() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -136,52 +105,34 @@ export function useUpdateDatabaseView() {
       id: string; 
       updates: Partial<DatabaseView>; 
     }) => {
-      const { data, error } = await supabase
-        .from('database_views')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['database-views', data.workspace_id] });
-      toast({ title: 'Visualização atualizada' });
+      console.warn('Database views feature requires database migration');
+      throw new Error('Database views feature not yet implemented');
     },
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Erro ao atualizar visualização',
-        description: error.message,
+        title: 'Visualizações não disponíveis',
+        description: 'Esta funcionalidade será implementada em breve.',
       });
     },
   });
 }
 
+// Stub hook - database_views table not yet created
 export function useDeleteDatabaseView() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from('database_views')
-        .delete()
-        .eq('id', id);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['database-views'] });
-      toast({ title: 'Visualização removida' });
+      console.warn('Database views feature requires database migration');
+      throw new Error('Database views feature not yet implemented');
     },
     onError: (error) => {
       toast({
         variant: 'destructive',
-        title: 'Erro ao remover visualização',
-        description: error.message,
+        title: 'Visualizações não disponíveis',
+        description: 'Esta funcionalidade será implementada em breve.',
       });
     },
   });

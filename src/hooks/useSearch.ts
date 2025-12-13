@@ -23,6 +23,7 @@ export interface SearchSuggestion {
   count: number;
 }
 
+// Stub hook - RPC function not yet created, use simple query instead
 export function useSearchBlocks(
   query: string,
   workspaceId?: string,
@@ -34,21 +35,39 @@ export function useSearchBlocks(
     queryFn: async () => {
       if (!query.trim()) return [];
 
+      // Use simple ilike search on blocks table
       const { data, error } = await supabase
-        .rpc('search_blocks_advanced', {
-          search_query: query,
-          workspace_filter: workspaceId,
-          block_type_filter: blockType,
-          limit_count: limit,
-        });
+        .from('blocks')
+        .select(`
+          id,
+          page_id,
+          type,
+          content,
+          metadata,
+          pages!inner (
+            title
+          )
+        `)
+        .ilike('content', `%${query}%`)
+        .limit(limit);
 
       if (error) throw error;
-      return data as SearchResult[];
+      
+      return (data || []).map((block: any) => ({
+        id: block.id,
+        page_id: block.page_id,
+        type: block.type,
+        content: block.content,
+        metadata: block.metadata,
+        page_title: block.pages?.title || '',
+        rank: 1,
+      })) as SearchResult[];
     },
     enabled: !!query.trim(),
   });
 }
 
+// Simple page search using existing pages table
 export function useSearchPages(
   query: string,
   workspaceId?: string,
@@ -60,19 +79,24 @@ export function useSearchPages(
       if (!query.trim()) return [];
 
       const { data, error } = await supabase
-        .rpc('search_pages_by_title', {
-          search_query: query,
-          workspace_filter: workspaceId,
-          limit_count: limit,
-        });
+        .from('pages')
+        .select('id, title')
+        .ilike('title', `%${query}%`)
+        .limit(limit);
 
       if (error) throw error;
-      return data as PageSearchResult[];
+      
+      return (data || []).map((page: any) => ({
+        id: page.id,
+        title: page.title,
+        rank: 1,
+      })) as PageSearchResult[];
     },
     enabled: !!query.trim(),
   });
 }
 
+// Stub hook - RPC function not yet created
 export function useSearchSuggestions(
   query: string,
   workspaceId?: string,
@@ -81,19 +105,10 @@ export function useSearchSuggestions(
   return useQuery({
     queryKey: ['search-suggestions', query, workspaceId, limit],
     queryFn: async () => {
-      if (!query.trim()) return [];
-
-      const { data, error } = await supabase
-        .rpc('get_search_suggestions', {
-          search_query: query,
-          workspace_filter: workspaceId,
-          limit_count: limit,
-        });
-
-      if (error) throw error;
-      return data as SearchSuggestion[];
+      // Return empty suggestions - feature not yet implemented
+      return [] as SearchSuggestion[];
     },
-    enabled: !!query.trim(),
+    enabled: false, // Disabled until RPC is created
   });
 }
 

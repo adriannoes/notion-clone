@@ -45,7 +45,7 @@ export function ShareWorkspaceModal({ isOpen, onClose, workspaceId, workspaceNam
       await createInviteMutation.mutateAsync({
         workspace_id: workspaceId,
         email: email.trim().toLowerCase(),
-        role,
+        role: role === 'admin' ? 'editor' : role,
       });
       
       setEmail("");

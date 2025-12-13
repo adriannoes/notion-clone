@@ -40,12 +40,12 @@ export function WorkspaceSelector({ currentWorkspaceId, onWorkspaceChange }: Wor
     setIsCreating(true);
     
     try {
-      const newWorkspace = await createWorkspaceMutation.mutateAsync({
+      await createWorkspaceMutation.mutateAsync({
         name: workspaceName.trim(),
         slug: workspaceName.toLowerCase().replace(/\s+/g, '-'),
       });
       
-      onWorkspaceChange(newWorkspace.id);
+      // Workspaces not yet implemented
       setIsCreateDialogOpen(false);
       setWorkspaceName("");
       setWorkspaceDescription("");
