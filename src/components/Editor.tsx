@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Plus, GripVertical, Trash2, MoreHorizontal } from "lucide-react";
+import { Plus, GripVertical, Trash2, MoreHorizontal, MessageSquare } from "lucide-react";
+import { CommentThread } from "@/components/CommentThread";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { usePresence } from "@/hooks/usePresence";
@@ -353,7 +354,7 @@ export function Editor({
         blockContent = (
           <TableBlock
             content={block.content}
-            metadata={block.metadata || { rows: 3, cols: 3, headerRow: true, headerCol: false }}
+            metadata={(block.metadata as TableMetadata) || { rows: 3, cols: 3, headerRow: true, headerCol: false }}
             onChange={(content, metadata) => updateBlock(block.id, { content, metadata })}
             onDelete={() => deleteBlock(block.id)}
             isHovered={hoveredBlockId === block.id}

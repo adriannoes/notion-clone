@@ -8,7 +8,7 @@ import { TemplateSelector, type TemplateType } from "@/components/TemplateSelect
 import { SaveIndicator } from "@/components/SaveIndicator";
 import { SidebarSkeleton } from "@/components/SidebarSkeleton";
 import { EditorSkeleton } from "@/components/EditorSkeleton";
-import { FileText } from "lucide-react";
+
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages, useUpdatePageParent } from "@/hooks/usePages";
 import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type Block as DBBlock } from "@/hooks/useBlocks";
@@ -28,8 +28,9 @@ import { PageProperties } from "@/components/PageProperties";
 import { DatabaseViewComponent } from "@/components/database/DatabaseView";
 import { useCanEdit, useCanDelete } from "@/hooks/usePermissions";
 import { usePresence } from "@/hooks/usePresence";
-import { History, Settings, X, Database, Menu } from "lucide-react";
+import { History, Settings, X, Database, Menu, FileText } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Button } from "@/components/ui/button";
 
 // Convert DB blocks to Editor blocks
 const dbBlockToEditorBlock = (block: DBBlock): EditorBlock => ({
@@ -190,7 +191,6 @@ const Index = () => {
           title: templateTitles[template],
           position: pages.length,
           parent_id: newPageParentId,
-          workspace_id: currentWorkspaceId,
         });
 
         // Create blocks for the new page

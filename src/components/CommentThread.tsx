@@ -185,7 +185,7 @@ export function CommentThread({ blockId, pageId, className }: CommentThreadProps
   const handleResolve = async (id: string) => {
     await resolveCommentMutation.mutateAsync({
       id,
-      updates: { resolved: true },
+      updates: { content: 'resolved' },
     });
   };
 

@@ -1,11 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import type { Database } from '@/integrations/supabase/types';
 
-export type Notification = Database['public']['Tables']['notifications']['Row'];
-export type NotificationInsert = Database['public']['Tables']['notifications']['Insert'];
-export type NotificationUpdate = Database['public']['Tables']['notifications']['Update'];
+// Using existing notifications table from types
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  message: string;
+  metadata: Record<string, any>;
+  is_read: boolean;
+  created_at: string;
+  updated_at: string;
+}
 
 export type NotificationType = 'invite' | 'mention' | 'page_shared' | 'page_updated' | 'comment' | 'activity';
 
@@ -47,19 +55,25 @@ export function useUnreadNotificationsCount() {
   });
 }
 
+// Stub hook - RPC function not yet created
 export function useCreateNotification() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
 
   return useMutation({
     mutationFn: async (params: CreateNotificationParams) => {
-      const { data, error } = await supabase.rpc('create_notification', {
-        p_user_id: params.userId,
-        p_type: params.type,
-        p_title: params.title,
-        p_message: params.message,
-        p_metadata: params.metadata || {}
-      });
+      // Use direct insert instead of RPC
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert({
+          user_id: params.userId,
+          type: params.type,
+          title: params.title,
+          message: params.message,
+          metadata: params.metadata || {},
+        })
+        .select()
+        .single();
       
       if (error) throw error;
       return data;
@@ -83,9 +97,12 @@ export function useMarkNotificationRead() {
 
   return useMutation({
     mutationFn: async (notificationId: string) => {
-      const { data, error } = await supabase.rpc('mark_notification_read', {
-        p_notification_id: notificationId
-      });
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('id', notificationId)
+        .select()
+        .single();
       
       if (error) throw error;
       return data;
@@ -109,10 +126,18 @@ export function useMarkAllNotificationsRead() {
 
   return useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.rpc('mark_all_notifications_read');
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Not authenticated');
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ is_read: true })
+        .eq('user_id', user.id)
+        .eq('is_read', false)
+        .select();
       
       if (error) throw error;
-      return data;
+      return data?.length || 0;
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
