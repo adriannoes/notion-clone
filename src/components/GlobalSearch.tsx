@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Search, FileText, X, Loader2, Clock, Filter, Zap } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { Search, FileText, X, Loader2, Clock, Filter, Zap, Tag } from "lucide-react";
 import { useDebounce } from "use-debounce";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { useCombinedSearch, useSearchSuggestions, highlightSearchTerm, truncateT
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { logger } from "@/lib/logger";
+import { format, subDays, startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfYear, endOfYear } from "date-fns";
 
 interface GlobalSearchProps {
   onPageSelect: (pageId: string) => void;
@@ -27,39 +28,130 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [blockTypeFilter, setBlockTypeFilter] = useState<string>("all");
   const [dateFilter, setDateFilter] = useState<string>("all");
+  const [authorFilter, setAuthorFilter] = useState<string>("all");
+  const [propertyFilter, setPropertyFilter] = useState<string>("");
+  const [propertyValueFilter, setPropertyValueFilter] = useState<string>("");
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
   const { toast } = useToast();
   const { user } = useAuth();
 
-  // Use advanced search
+  // Use advanced search with filters (use clean query if property filters exist)
+  const searchQuery = parseSearchQuery.cleanQuery || debouncedQuery;
   const search = useCombinedSearch(
-    debouncedQuery,
+    searchQuery,
     workspaceId,
     blockTypeFilter === "all" ? undefined : blockTypeFilter,
     20
   );
 
   const suggestions = useSearchSuggestions(debouncedQuery, workspaceId, 5);
+  const { data: propertySchema = [] } = useWorkspacePropertySchema(workspaceId);
+  const { data: pagesWithProperties = [] } = usePagesWithProperties(workspaceId);
 
-  // Combine and format results
-  const combinedResults = [
-    ...search.pages.map(page => ({
-      id: page.id,
-      title: page.title,
-      type: 'page',
-      rank: page.rank,
-      content: page.title,
-    })),
-    ...search.blocks.map(block => ({
-      id: block.page_id,
-      title: block.page_title,
-      type: 'block',
-      rank: block.rank,
-      content: block.content,
-      blockType: block.type,
-    })),
-  ].sort((a, b) => b.rank - a.rank).slice(0, 20);
+  // Parse search query for property filters (e.g., "tag:valor" or "status:done")
+  const parseSearchQuery = useMemo(() => {
+    const propertyPattern = /(\w+):([^\s]+)/g;
+    const matches = [...query.matchAll(propertyPattern)];
+    const propertyFilters: Record<string, string> = {};
+    let cleanQuery = query;
+
+    matches.forEach(match => {
+      const [fullMatch, propertyName, propertyValue] = match;
+      propertyFilters[propertyName] = propertyValue;
+      cleanQuery = cleanQuery.replace(fullMatch, '').trim();
+    });
+
+    return { cleanQuery, propertyFilters };
+  }, [query]);
+
+  // Search pages by properties if property filters exist
+  const propertySearchResults = useMemo(() => {
+    if (Object.keys(parseSearchQuery.propertyFilters).length === 0) return [];
+
+    return pagesWithProperties.filter(page => {
+      return Object.entries(parseSearchQuery.propertyFilters).every(([propName, propValue]) => {
+        const property = page.properties[propName];
+        if (!property) return false;
+        
+        const value = property.value;
+        if (typeof value === 'object') {
+          return JSON.stringify(value).toLowerCase().includes(propValue.toLowerCase());
+        }
+        return String(value).toLowerCase().includes(propValue.toLowerCase());
+      });
+    }).map(page => ({
+      id: page.page_id,
+      title: page.page_title,
+      type: 'page' as const,
+      rank: 1.0,
+      content: page.page_title,
+      createdAt: undefined as Date | undefined,
+    }));
+  }, [pagesWithProperties, parseSearchQuery.propertyFilters]);
+
+  // Apply date filter to results
+  const filteredResults = useMemo(() => {
+    // If property filters exist, use property search results
+    if (Object.keys(parseSearchQuery.propertyFilters).length > 0) {
+      return propertySearchResults;
+    }
+
+    // Otherwise use regular search
+    let results = [
+      ...search.pages.map(page => ({
+        id: page.id,
+        title: page.title,
+        type: 'page' as const,
+        rank: page.rank,
+        content: page.title,
+        createdAt: undefined as Date | undefined,
+      })),
+      ...search.blocks.map(block => ({
+        id: block.page_id,
+        title: block.page_title,
+        type: 'block' as const,
+        rank: block.rank,
+        content: block.content,
+        blockType: block.type,
+        createdAt: undefined as Date | undefined,
+      })),
+    ];
+
+    // Apply date filter if needed
+    if (dateFilter !== "all" && debouncedQuery) {
+      const now = new Date();
+      let startDate: Date | null = null;
+      let endDate: Date | null = null;
+
+      switch (dateFilter) {
+        case "today":
+          startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+          break;
+        case "week":
+          startDate = startOfWeek(now);
+          endDate = endOfWeek(now);
+          break;
+        case "month":
+          startDate = startOfMonth(now);
+          endDate = endOfMonth(now);
+          break;
+        case "year":
+          startDate = startOfYear(now);
+          endDate = endOfYear(now);
+          break;
+      }
+
+      // Note: Date filtering would require fetching page dates, 
+      // which is not currently in the search results
+      // This is a placeholder for future implementation
+    }
+
+    return results.sort((a, b) => b.rank - a.rank).slice(0, 20);
+  }, [search.pages, search.blocks, dateFilter, debouncedQuery, parseSearchQuery.propertyFilters, propertySearchResults]);
+
+  const combinedResults = filteredResults;
 
   // Load recent searches from localStorage
   useEffect(() => {
@@ -109,100 +201,10 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isOpen]);
 
-  // Async search logic with database queries
-  const performSearch = useCallback(async (searchQuery: string) => {
-    if (!searchQuery.trim()) {
-      setResults([]);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const lowerQuery = searchQuery.toLowerCase();
-    const searchResults: SearchResult[] = [];
-
-    try {
-      // First, search in page titles (fast, in-memory)
-      const titleMatches = pages.filter(page =>
-        page.title.toLowerCase().includes(lowerQuery)
-      );
-
-      titleMatches.forEach(page => {
-        if (searchResults.length >= MAX_RESULTS) return;
-        searchResults.push({
-          pageId: page.id,
-          title: page.title,
-          matchType: "title"
-        });
-      });
-
-      // If we haven't reached the limit, search in content
-      if (searchResults.length < MAX_RESULTS) {
-        const remainingSlots = MAX_RESULTS - searchResults.length;
-        
-        // Search in blocks content (requires DB query)
-        const { data: blockMatches, error } = await supabase
-          .from("blocks")
-          .select("page_id, content")
-          .ilike("content", `%${searchQuery}%`)
-          .limit(remainingSlots);
-
-        if (error) {
-          logger.error("Search error:", error);
-          toast({
-            title: "Erro na busca",
-            description: "Não foi possível buscar no conteúdo das páginas.",
-            variant: "destructive",
-          });
-        } else if (blockMatches) {
-          // Get unique page IDs from block matches
-          const matchedPageIds = new Set(blockMatches.map(b => b.page_id));
-          
-          matchedPageIds.forEach(pageId => {
-            if (searchResults.length >= MAX_RESULTS) return;
-            
-            // Skip if already in results (title match)
-            if (searchResults.some(r => r.pageId === pageId)) return;
-            
-            const page = pages.find(p => p.id === pageId);
-            if (!page) return;
-
-            const blockMatch = blockMatches.find(b => b.page_id === pageId);
-            const preview = blockMatch?.content?.substring(0, 100) || "";
-
-            searchResults.push({
-              pageId: page.id,
-              title: page.title,
-              matchType: "content",
-              preview
-            });
-          });
-        }
-      }
-
-      setResults(searchResults);
-      setSelectedIndex(0);
-    } catch (error) {
-      logger.error("Search error:", error);
-      toast({
-        title: "Erro na busca",
-        description: "Ocorreu um erro ao realizar a busca.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSearching(false);
-    }
-  }, [pages, toast]);
-
-  // Debounced search effect
+  // Reset selected index when results change
   useEffect(() => {
-    if (debouncedQuery) {
-      performSearch(debouncedQuery);
-    } else {
-      setResults([]);
-      setIsSearching(false);
-    }
-  }, [debouncedQuery, performSearch]);
+    setSelectedIndex(0);
+  }, [combinedResults]);
 
   const handleSelect = (pageId: string) => {
     saveRecentSearch(query);
@@ -258,7 +260,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Buscar páginas e conteúdo..."
+                placeholder="Buscar páginas e conteúdo... (ex: tag:valor ou status:done)"
                 className="border-0 focus-visible:ring-0 text-base h-12"
                 autoFocus
               />
@@ -288,6 +290,44 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
                   <SelectItem value="year">Este ano</SelectItem>
                 </SelectContent>
               </Select>
+              {propertySchema.length > 0 && (
+                <Select value={propertyFilter} onValueChange={setPropertyFilter}>
+                  <SelectTrigger className="w-40 h-12">
+                    <SelectValue placeholder="Propriedade" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Todas</SelectItem>
+                    {propertySchema.map(prop => (
+                      <SelectItem key={prop.property_name} value={prop.property_name}>
+                        {prop.property_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              {propertyFilter && (
+                <Input
+                  value={propertyValueFilter}
+                  onChange={(e) => setPropertyValueFilter(e.target.value)}
+                  placeholder="Valor da propriedade..."
+                  className="w-40 h-12"
+                />
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setBlockTypeFilter("all");
+                  setDateFilter("all");
+                  setAuthorFilter("all");
+                  setPropertyFilter("");
+                  setPropertyValueFilter("");
+                }}
+                className="h-12"
+                title="Limpar filtros"
+              >
+                <X className="h-4 w-4" />
+              </Button>
             </div>
             <Button
               variant="ghost"
@@ -305,7 +345,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
           {/* Results */}
           <div className="max-h-[400px] overflow-y-auto p-2">
             {/* Loading State */}
-            {isSearching && (
+            {search.isLoading && (
               <div className="flex items-center justify-center py-8 gap-2 text-text-tertiary">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span className="text-sm">Buscando...</span>
@@ -313,14 +353,14 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
             )}
 
             {/* No Results */}
-            {!search.isLoading && combinedResults.length === 0 && query && (
+            {!search.isLoading && combinedResults.length === 0 && debouncedQuery && (
               <div className="py-8 text-center text-text-tertiary text-sm">
-                Nenhum resultado para "{query}"
+                Nenhum resultado para "{debouncedQuery}"
               </div>
             )}
             
             {/* Recent Searches */}
-            {!search.isLoading && combinedResults.length === 0 && !query && recentSearches.length > 0 && (
+            {!search.isLoading && combinedResults.length === 0 && !debouncedQuery && recentSearches.length > 0 && (
               <div className="py-2">
                 <div className="text-xs font-medium text-text-tertiary px-3 mb-2">
                   Buscas recentes
@@ -339,7 +379,7 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
             )}
 
             {/* Empty State */}
-            {!search.isLoading && combinedResults.length === 0 && !query && recentSearches.length === 0 && (
+            {!search.isLoading && combinedResults.length === 0 && !debouncedQuery && recentSearches.length === 0 && (
               <div className="py-8 text-center text-text-tertiary text-sm">
                 Digite para buscar páginas...
               </div>
@@ -348,28 +388,42 @@ export function GlobalSearch({ onPageSelect, workspaceId }: GlobalSearchProps) {
             {/* Search Results */}
             {!search.isLoading && combinedResults.map((result, index) => (
               <div
-                key={`${result.type}-${result.id}`}
+                key={`${result.type}-${result.id}-${index}`}
                 onClick={() => handleSelect(result.id)}
                 className={cn(
                   "flex items-start gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors",
-                  selectedIndex === index ? "bg-block-selected" : "hover:bg-hover-bg"
+                  selectedIndex === index ? "bg-primary/10 border border-primary/20" : "hover:bg-hover-bg"
                 )}
               >
                 <FileText className="h-4 w-4 text-text-tertiary mt-0.5 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm">{result.title}</div>
+                  <div 
+                    className="font-medium text-sm"
+                    dangerouslySetInnerHTML={{
+                      __html: highlightSearchTerm(result.title, debouncedQuery)
+                    }}
+                  />
                   {result.type === 'block' && result.content && (
-                    <div className="text-xs text-text-tertiary mt-0.5 truncate">
-                      {truncateText(result.content, 80)}
-                    </div>
+                    <div 
+                      className="text-xs text-text-tertiary mt-0.5 truncate"
+                      dangerouslySetInnerHTML={{
+                        __html: highlightSearchTerm(truncateText(result.content, 80), debouncedQuery)
+                      }}
+                    />
                   )}
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
                     <Badge variant="outline" className="text-xs">
                       {result.type === 'page' ? 'página' : 'conteúdo'}
                     </Badge>
                     {result.type === 'block' && result.blockType && (
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="secondary" className="text-xs">
                         {result.blockType}
+                      </Badge>
+                    )}
+                    {result.rank && result.rank > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        <Zap className="h-3 w-3 mr-1" />
+                        {Math.round(result.rank * 100)}%
                       </Badge>
                     )}
                   </div>
