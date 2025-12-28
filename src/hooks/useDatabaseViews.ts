@@ -6,7 +6,7 @@ export interface DatabaseView {
   id: string;
   workspace_id: string;
   name: string;
-  view_type: 'table' | 'kanban' | 'calendar';
+  view_type: 'table' | 'kanban' | 'calendar' | 'gallery';
   configuration: Record<string, any>;
   is_default: boolean;
   created_at: string;

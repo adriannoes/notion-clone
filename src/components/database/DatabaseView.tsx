@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Table, Kanban, Calendar, Plus, Settings } from "lucide-react";
+import { Table, Kanban, Calendar, Image, Plus, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { TableView } from "./TableView";
 import { KanbanView } from "./KanbanView";
 import { CalendarView } from "./CalendarView";
+import { GalleryView } from "./GalleryView";
 import { useDatabaseViews, usePagesWithProperties, useWorkspacePropertySchema } from "@/hooks/useDatabaseViews";
 import type { DatabaseView } from "@/hooks/useDatabaseViews";
 
@@ -21,6 +22,7 @@ const VIEW_ICONS = {
   table: Table,
   kanban: Kanban,
   calendar: Calendar,
+  gallery: Image,
 };
 
 export function DatabaseViewComponent({ 
@@ -126,12 +128,23 @@ export function DatabaseViewComponent({
             propertySchema={propertySchema}
             onPageSelect={onPageSelect}
             onAddPage={onAddPage}
+            workspaceId={workspaceId}
             className="p-4"
           />
         )}
         
         {currentView?.view_type === 'calendar' && (
           <CalendarView
+            pages={pages}
+            propertySchema={propertySchema}
+            onPageSelect={onPageSelect}
+            onAddPage={onAddPage}
+            className="p-4"
+          />
+        )}
+        
+        {currentView?.view_type === 'gallery' && (
+          <GalleryView
             pages={pages}
             propertySchema={propertySchema}
             onPageSelect={onPageSelect}
