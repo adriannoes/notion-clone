@@ -1,5 +1,5 @@
-import { useState, useMemo } from "react";
-import { Plus, MoreHorizontal, Settings } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Plus, MoreHorizontal, Settings, Edit2, Trash2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -8,8 +8,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { useSetPageProperty } from "@/hooks/usePageProperties";
+import { useToast } from "@/hooks/use-toast";
 import {
   DndContext,
   DragEndEvent,
@@ -31,12 +36,14 @@ interface KanbanViewProps {
   onPageSelect?: (pageId: string) => void;
   onAddPage?: () => void;
   className?: string;
+  workspaceId?: string;
 }
 
 interface KanbanColumn {
   id: string;
   title: string;
   pages: PageWithProperties[];
+  color?: string;
 }
 
 function KanbanCard({ page, onSelect }: { page: PageWithProperties; onSelect?: (id: string) => void }) {
@@ -84,15 +91,24 @@ function KanbanCard({ page, onSelect }: { page: PageWithProperties; onSelect?: (
 function KanbanColumnComponent({ 
   column, 
   onPageSelect, 
-  onAddPage 
+  onAddPage,
+  onEditColumn,
+  onDeleteColumn,
+  canEdit
 }: { 
   column: KanbanColumn; 
   onPageSelect?: (pageId: string) => void;
   onAddPage?: () => void;
+  onEditColumn?: (columnId: string) => void;
+  onDeleteColumn?: (columnId: string) => void;
+  canEdit?: boolean;
 }) {
   return (
     <div
-      className="flex-1 min-w-[280px] bg-muted/30 rounded-lg p-4"
+      className={cn(
+        "flex-1 min-w-[280px] rounded-lg p-4",
+        column.color ? `bg-${column.color}/10 border border-${column.color}/20` : "bg-muted/30"
+      )}
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
@@ -101,19 +117,29 @@ function KanbanColumnComponent({
             {column.pages.length}
           </Badge>
         </div>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem>
-              <Settings className="h-4 w-4 mr-2" />
-              Configurar coluna
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {canEdit && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onEditColumn?.(column.id)}>
+                <Edit2 className="h-4 w-4 mr-2" />
+                Editar coluna
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem 
+                onClick={() => onDeleteColumn?.(column.id)}
+                className="text-destructive"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Excluir coluna
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       <SortableContext items={column.pages.map(p => p.page_id)} strategy={verticalListSortingStrategy}>
@@ -124,15 +150,17 @@ function KanbanColumnComponent({
         </div>
       </SortableContext>
 
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={onAddPage}
-        className="w-full mt-2 text-text-secondary hover:text-text-primary"
-      >
-        <Plus className="h-4 w-4 mr-2" />
-        Adicionar página
-      </Button>
+      {onAddPage && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onAddPage}
+          className="w-full mt-2 text-text-secondary hover:text-text-primary"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Adicionar página
+        </Button>
+      )}
     </div>
   );
 }
@@ -142,7 +170,8 @@ export function KanbanView({
   propertySchema, 
   onPageSelect, 
   onAddPage,
-  className 
+  className,
+  workspaceId
 }: KanbanViewProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [columns, setColumns] = useState<KanbanColumn[]>([
@@ -150,6 +179,10 @@ export function KanbanView({
     { id: 'in-progress', title: 'In Progress', pages: [] },
     { id: 'done', title: 'Done', pages: [] },
   ]);
+  const [editingColumn, setEditingColumn] = useState<string | null>(null);
+  const [newColumnTitle, setNewColumnTitle] = useState('');
+  const { toast } = useToast();
+  const setPageProperty = useSetPageProperty();
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -163,6 +196,29 @@ export function KanbanView({
   const statusProperty = propertySchema.find(p => 
     p.property_type === 'select' || p.property_name.toLowerCase().includes('status')
   );
+
+  // Get unique values from status property to create columns dynamically
+  useEffect(() => {
+    if (statusProperty && pages.length > 0) {
+      const uniqueValues = new Set<string>();
+      pages.forEach(page => {
+        const statusValue = page.properties[statusProperty.property_name];
+        if (statusValue && typeof statusValue === 'object' && statusValue.value) {
+          uniqueValues.add(String(statusValue.value));
+        }
+      });
+
+      // Create columns from unique values if we have a status property
+      if (uniqueValues.size > 0) {
+        const dynamicColumns: KanbanColumn[] = Array.from(uniqueValues).map(value => ({
+          id: value.toLowerCase().replace(/\s+/g, '-'),
+          title: value,
+          pages: []
+        }));
+        setColumns(dynamicColumns);
+      }
+    }
+  }, [statusProperty, pages]);
 
   // Group pages by status
   const groupedPages = useMemo(() => {
@@ -230,18 +286,19 @@ export function KanbanView({
     // Handle drag over logic
   };
 
-  const handleDragEnd = (event: DragEndEvent) => {
+  const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
     
     if (!over) return;
     
     const activeId = active.id as string;
-    const overId = over.id as string;
     
     // Find which column the page is being moved to
-    const targetColumn = filteredColumns.find(col => 
-      col.id === overId || col.pages.some(p => p.page_id === overId)
-    );
+    const targetColumn = filteredColumns.find(col => {
+      // Check if dropped on column itself or on a card in the column
+      if (col.id === over.id) return true;
+      return col.pages.some(p => p.page_id === over.id);
+    });
     
     if (!targetColumn) return;
     
@@ -252,7 +309,33 @@ export function KanbanView({
     
     if (!sourceColumn || sourceColumn.id === targetColumn.id) return;
     
-    // Move page to new column
+    // Update page property if status property exists
+    if (statusProperty && workspaceId) {
+      try {
+        const page = sourceColumn.pages.find(p => p.page_id === activeId);
+        if (page) {
+          await setPageProperty.mutateAsync({
+            pageId: activeId,
+            propertyName: statusProperty.property_name,
+            propertyType: statusProperty.property_type,
+            value: { select: targetColumn.title }
+          });
+          
+          toast({
+            title: "Página movida",
+            description: `Movida para "${targetColumn.title}"`,
+          });
+        }
+      } catch (error) {
+        toast({
+          variant: "destructive",
+          title: "Erro ao mover página",
+          description: "Não foi possível atualizar a propriedade.",
+        });
+      }
+    }
+    
+    // Optimistically update UI
     setColumns(prev => prev.map(col => {
       if (col.id === sourceColumn.id) {
         return {
@@ -273,16 +356,57 @@ export function KanbanView({
     }));
   };
 
+  const handleAddColumn = () => {
+    const newId = `column-${Date.now()}`;
+    setColumns(prev => [...prev, { id: newId, title: 'Nova Coluna', pages: [] }]);
+    setEditingColumn(newId);
+    setNewColumnTitle('Nova Coluna');
+  };
+
+  const handleEditColumn = (columnId: string) => {
+    const column = columns.find(c => c.id === columnId);
+    if (column) {
+      setEditingColumn(columnId);
+      setNewColumnTitle(column.title);
+    }
+  };
+
+  const handleSaveColumn = () => {
+    if (!editingColumn || !newColumnTitle.trim()) return;
+    
+    setColumns(prev => prev.map(col => 
+      col.id === editingColumn 
+        ? { ...col, title: newColumnTitle.trim() }
+        : col
+    ));
+    setEditingColumn(null);
+    setNewColumnTitle('');
+  };
+
+  const handleDeleteColumn = (columnId: string) => {
+    setColumns(prev => prev.filter(col => col.id !== columnId));
+  };
+
   return (
     <div className={cn("space-y-4", className)}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <Input
-          placeholder="Buscar páginas..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-64"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            placeholder="Buscar páginas..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-64"
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleAddColumn}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Nova Coluna
+          </Button>
+        </div>
         {onAddPage && (
           <Button onClick={onAddPage} size="sm">
             <Plus className="h-4 w-4 mr-2" />
@@ -290,6 +414,42 @@ export function KanbanView({
           </Button>
         )}
       </div>
+
+      {/* Edit Column Dialog */}
+      <Dialog open={!!editingColumn} onOpenChange={(open) => !open && setEditingColumn(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Coluna</DialogTitle>
+            <DialogDescription>
+              Altere o nome da coluna
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="column-title">Nome da Coluna</Label>
+              <Input
+                id="column-title"
+                value={newColumnTitle}
+                onChange={(e) => setNewColumnTitle(e.target.value)}
+                placeholder="Nome da coluna..."
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    handleSaveColumn();
+                  }
+                }}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditingColumn(null)}>
+                Cancelar
+              </Button>
+              <Button onClick={handleSaveColumn}>
+                Salvar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Kanban Board */}
       <DndContext
@@ -306,6 +466,9 @@ export function KanbanView({
               column={column}
               onPageSelect={onPageSelect}
               onAddPage={onAddPage}
+              onEditColumn={handleEditColumn}
+              onDeleteColumn={handleDeleteColumn}
+              canEdit={!!workspaceId}
             />
           ))}
         </div>
