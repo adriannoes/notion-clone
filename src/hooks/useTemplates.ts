@@ -6,14 +6,26 @@ import type { Database } from '@/integrations/supabase/types';
 export type Template = Database['public']['Tables']['templates']['Row'];
 export type TemplateInsert = Database['public']['Tables']['templates']['Insert'];
 
-export function useTemplates() {
+export function useTemplates(includePublic: boolean = true) {
   return useQuery({
-    queryKey: ['templates'],
+    queryKey: ['templates', includePublic],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return [];
+
+      let query = supabase
         .from('templates')
-        .select('*')
-        .order('created_at', { ascending: false });
+        .select('*');
+
+      if (includePublic) {
+        // Get own templates OR public templates
+        query = query.or(`user_id.eq.${user.id},is_public.eq.true`);
+      } else {
+        // Only own templates
+        query = query.eq('user_id', user.id);
+      }
+
+      const { data, error } = await query.order('created_at', { ascending: false });
       
       if (error) throw error;
       return data as Template[];

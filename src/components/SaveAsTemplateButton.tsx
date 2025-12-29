@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateTemplate } from "@/hooks/useTemplates";
 import { useToast } from "@/hooks/use-toast";
 import type { Block } from "@/components/Editor";
@@ -19,6 +20,7 @@ export function SaveAsTemplateButton({ title, blocks, disabled }: SaveAsTemplate
   const [isOpen, setIsOpen] = useState(false);
   const [templateName, setTemplateName] = useState("");
   const [templateDescription, setTemplateDescription] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const createTemplateMutation = useCreateTemplate();
@@ -43,7 +45,7 @@ export function SaveAsTemplateButton({ title, blocks, disabled }: SaveAsTemplate
         name: templateName.trim(),
         description: templateDescription.trim() || undefined,
         blocks: JSON.stringify(blocks),
-        is_public: false,
+        is_public: isPublic,
       });
       
       toast({
@@ -107,6 +109,17 @@ export function SaveAsTemplateButton({ title, blocks, disabled }: SaveAsTemplate
               placeholder="Descreva o que este template contém..."
               rows={3}
             />
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="template-public"
+              checked={isPublic}
+              onCheckedChange={(checked) => setIsPublic(checked === true)}
+            />
+            <Label htmlFor="template-public" className="text-sm font-normal cursor-pointer">
+              Tornar este template público (outros usuários poderão usá-lo)
+            </Label>
           </div>
           
           <div className="text-sm text-text-tertiary">

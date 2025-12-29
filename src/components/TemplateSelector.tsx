@@ -2,6 +2,7 @@ import { FileText, CheckSquare, Calendar, Code, Lightbulb, User, Trash2 } from "
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import { useTemplates, useDeleteTemplate } from "@/hooks/useTemplates";
 import type { Block } from "@/components/Editor";
 
@@ -97,8 +98,12 @@ const templates: Template[] = [
 ];
 
 export function TemplateSelector({ isOpen, onClose, onSelect }: TemplateSelectorProps) {
-  const { data: userTemplates = [], isLoading } = useTemplates();
+  const { data: userTemplates = [], isLoading } = useTemplates(false); // Only own templates
+  const { data: publicTemplates = [], isLoading: isLoadingPublic } = useTemplates(true); // Include public
   const deleteTemplateMutation = useDeleteTemplate();
+  
+  // Filter public templates (exclude own)
+  const publicOnlyTemplates = publicTemplates.filter(t => t.is_public && !userTemplates.some(ut => ut.id === t.id));
 
   const handleSelect = (template: Template) => {
     onSelect(template.id, template.blocks);
@@ -127,9 +132,10 @@ export function TemplateSelector({ isOpen, onClose, onSelect }: TemplateSelector
         </DialogHeader>
         
         <Tabs defaultValue="default" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="default">Templates Padrão</TabsTrigger>
             <TabsTrigger value="custom">Meus Templates</TabsTrigger>
+            <TabsTrigger value="public">Templates Públicos</TabsTrigger>
           </TabsList>
           
           <TabsContent value="default" className="mt-4">
@@ -187,6 +193,42 @@ export function TemplateSelector({ isOpen, onClose, onSelect }: TemplateSelector
                     </div>
                     <p className="text-xs text-text-tertiary text-left">
                       {template.description || 'Template personalizado'}
+                    </p>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="public" className="mt-4">
+            {isLoadingPublic ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            ) : publicOnlyTemplates.length === 0 ? (
+              <div className="text-center py-8 text-text-tertiary">
+                <User className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p>Nenhum template público disponível.</p>
+                <p className="text-sm">Templates públicos aparecerão aqui quando outros usuários compartilharem.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {publicOnlyTemplates.map((template) => (
+                  <Button
+                    key={template.id}
+                    variant="outline"
+                    onClick={() => handleSelectUserTemplate(template)}
+                    className="h-auto flex-col items-start p-4 hover:bg-hover-bg hover:border-primary group relative"
+                  >
+                    <div className="flex items-center gap-2 mb-2 text-primary w-full">
+                      <User className="h-5 w-5" />
+                      <span className="font-semibold flex-1">{template.name}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        Público
+                      </Badge>
+                    </div>
+                    <p className="text-xs text-text-tertiary text-left">
+                      {template.description || 'Template público'}
                     </p>
                   </Button>
                 ))}
