@@ -198,6 +198,24 @@ export function VersionHistory({ isOpen, onClose, pageId, pageTitle }: VersionHi
                                 {block.content}
                               </blockquote>
                             )}
+                            {block.type === 'callout' && (
+                              <div className={`p-3 rounded-lg border-l-4 ${
+                                block.metadata?.calloutType === 'warning' ? 'bg-yellow-50 border-yellow-400' :
+                                block.metadata?.calloutType === 'error' ? 'bg-red-50 border-red-400' :
+                                block.metadata?.calloutType === 'success' ? 'bg-green-50 border-green-400' :
+                                'bg-blue-50 border-blue-400'
+                              }`}>
+                                {block.content}
+                              </div>
+                            )}
+                            {block.type === 'code' && (
+                              <pre className="bg-muted p-2 rounded text-xs font-mono overflow-x-auto">
+                                <code>{block.content}</code>
+                              </pre>
+                            )}
+                            {block.type === 'divider' && (
+                              <hr className="border-border" />
+                            )}
                           </div>
                         ))
                       ) : (
