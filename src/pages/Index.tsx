@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Sidebar, type Page as SidebarPage } from "@/components/Sidebar";
 import { Editor, type Block as EditorBlock } from "@/components/Editor";
@@ -12,6 +12,7 @@ import { FileText } from "lucide-react";
 import { useAutoSave } from "@/hooks/useAutoSave";
 import { usePages, useCreatePage, useUpdatePage, useDeletePage, useReorderPages, useUpdatePageParent } from "@/hooks/usePages";
 import { useBlocks, useCreateBlock, useUpdateBlock, useBatchUpdateBlocks, type Block as DBBlock } from "@/hooks/useBlocks";
+import { useCreateVersion } from "@/hooks/useVersions";
 import { useToast } from "@/hooks/use-toast";
 import { usePageHierarchy } from "@/hooks/usePageHierarchy";
 import { useAuth } from "@/contexts/AuthContext";
@@ -77,6 +78,7 @@ const Index = () => {
   const reorderPagesMutation = useReorderPages();
   const updatePageParentMutation = useUpdatePageParent();
   const batchUpdateBlocksMutation = useBatchUpdateBlocks();
+  const createVersionMutation = useCreateVersion();
 
   // Get current page
   const currentPage = pages.find(p => p.id === currentPageId);
@@ -107,6 +109,10 @@ const Index = () => {
     },
   });
 
+  // Track last version creation time
+  const lastVersionTimeRef = useRef<number>(0);
+  const VERSION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
   // Auto-save for blocks
   const blocksAutoSave = useAutoSave({
     onSave: async () => {
@@ -127,6 +133,22 @@ const Index = () => {
         blocks: blockUpdates,
         pageId: currentPageId,
       });
+
+      // Create version snapshot every 5 minutes
+      const now = Date.now();
+      if (now - lastVersionTimeRef.current > VERSION_INTERVAL_MS) {
+        try {
+          await createVersionMutation.mutateAsync({
+            pageId: currentPageId,
+            title: localTitle,
+            blocks: localBlocks,
+          });
+          lastVersionTimeRef.current = now;
+        } catch (error) {
+          // Silently fail version creation - don't interrupt save
+          logger.warn('Failed to create version snapshot:', error);
+        }
+      }
     },
   });
 
@@ -637,6 +659,16 @@ const Index = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Version History Modal */}
+      {isVersionHistoryOpen && currentPage && (
+        <VersionHistory
+          isOpen={isVersionHistoryOpen}
+          onClose={() => setIsVersionHistoryOpen(false)}
+          pageId={currentPageId || ""}
+          pageTitle={localTitle}
+        />
       )}
     </div>
   );
