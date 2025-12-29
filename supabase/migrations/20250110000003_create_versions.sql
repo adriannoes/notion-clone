@@ -119,12 +119,21 @@ BEGIN
   SET title = version_record.title, updated_at = NOW()
   WHERE id = version_record.page_id;
 
-  -- Delete existing blocks and recreate from version
+  -- Delete existing blocks
   DELETE FROM blocks WHERE page_id = version_record.page_id;
 
-  -- Insert blocks from version (this is a simplified version)
-  -- In a real implementation, you'd need to properly parse and insert the blocks
-  -- For now, we'll just update the page title
+  -- Insert blocks from version
+  INSERT INTO blocks (page_id, type, content, metadata, position, created_at, updated_at)
+  SELECT 
+    version_record.page_id,
+    (block->>'type')::TEXT,
+    COALESCE(block->>'content', ''),
+    COALESCE((block->>'metadata')::JSONB, '{}'::JSONB),
+    (block->>'position')::INTEGER,
+    NOW(),
+    NOW()
+  FROM jsonb_array_elements(version_record.blocks) AS block
+  ORDER BY COALESCE((block->>'position')::INTEGER, 0);
 
   RETURN TRUE;
 END;
